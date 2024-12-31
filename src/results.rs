@@ -126,3 +126,67 @@ pub trait ResultSet {
         Box::new((0..self.number_of_columns()).map(|column| Column { column }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn result_name_matches_two_empty_results() {
+        let first = ResultName::root();
+        let second = ResultName::root();
+
+        assert!(first.matches(&second));
+    }
+
+    #[test]
+    fn result_name_matches_empty_results_with_full() {
+        let first = ResultName::root().append("one").append("two");
+        let second = ResultName::root();
+
+        assert!(first.matches(&second));
+    }
+
+    #[test]
+    fn result_name_matches_full_results_with_full() {
+        let first = ResultName::root().append("one").append("two");
+        let second = ResultName::root().append("two");
+
+        assert!(first.matches(&second));
+    }
+
+    #[test]
+    fn result_name_matches_full_results_with_full_other() {
+        let first = ResultName::root().append("one").append("two");
+        let second = ResultName::root().append("one").append("Two");
+
+        assert!(!first.matches(&second));
+    }
+
+    #[test]
+    fn result_name_matches_empty_results_with_full_too_short() {
+        let first = ResultName::root().append("two");
+        let second = ResultName::root().append("one").append("two");
+
+        assert!(!first.matches(&second));
+    }
+
+    /*
+        pub fn matches(&self, other: &Self) -> bool {
+        // self can be longer then other
+        if let Some(other_name) = other.elements.last() {
+            if let Some(my_name) = self.elements.last() {
+                if my_name == other_name {
+                    self.parent().matches(&other.parent())
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            true
+        }
+    }
+
+     */
+}
