@@ -97,9 +97,9 @@ impl ResultSet for FileResultSet {
             .map(|col| col.name())
             .map(|name| ColumnName::new(&self.file_name, name))
     }
-    fn column_index(&self, name: &ColumnName) -> Option<&Column> {
+    fn column_index(&self, name: &ColumnName) -> Option<Column> {
         if self.file_name.matches(name.parent()) {
-            self.columns.names.get(name.name())
+            self.columns.names.get(name.name()).cloned()
         } else {
             None
         }

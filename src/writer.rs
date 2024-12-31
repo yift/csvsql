@@ -74,7 +74,7 @@ mod tests {
                 let name = format!("col {}", column.get_index());
                 Some(ColumnName::simple(&name))
             }
-            fn column_index(&self, _: &ColumnName) -> Option<&Column> {
+            fn column_index(&self, _: &ColumnName) -> Option<Column> {
                 None
             }
             fn result_name(&self) -> Option<&Rc<ResultName>> {

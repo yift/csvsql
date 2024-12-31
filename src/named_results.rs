@@ -25,9 +25,12 @@ impl ResultSet for NamedResultSet {
             .column_name(column)
             .map(|name| ColumnName::new(&self.name, name.name()))
     }
-    fn column_index(&self, name: &ColumnName) -> Option<&Column> {
+    fn column_index(&self, name: &ColumnName) -> Option<Column> {
         if self.name.matches(name.parent()) {
-            let name = ColumnName::new(&self.name, name.name());
+            let name = match self.results.result_name() {
+                Some(parent) => ColumnName::new(parent, name.name()),
+                None => ColumnName::simple(name.name()),
+            };
             self.results.column_index(&name)
         } else {
             None

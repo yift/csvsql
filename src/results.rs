@@ -16,7 +16,7 @@ impl Row {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Column {
     column: usize,
 }
@@ -29,11 +29,12 @@ impl Column {
     }
 }
 
+#[derive(Debug)]
 pub struct ResultName {
     elements: Vec<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ColumnName {
     parent: Rc<ResultName>,
     name: String,
@@ -109,13 +110,13 @@ pub trait ResultSet {
     fn number_of_rows(&self) -> usize;
     fn number_of_columns(&self) -> usize;
     fn column_name(&self, column: &Column) -> Option<ColumnName>;
-    fn column_index(&self, name: &ColumnName) -> Option<&Column>;
+    fn column_index(&self, name: &ColumnName) -> Option<Column>;
     fn result_name(&self) -> Option<&Rc<ResultName>>;
     fn get(&self, row: &Row, column: &Column) -> &Value;
 
     fn value(&self, row: &Row, name: &ColumnName) -> &Value {
         match self.column_index(name) {
-            Some(column) => self.get(row, column),
+            Some(column) => self.get(row, &column),
             None => &Value::Empty,
         }
     }

@@ -23,10 +23,16 @@ impl ResultSet for ProductResults {
             ))
         })
     }
-    fn column_index(&self, name: &ColumnName) -> Option<&Column> {
+    fn column_index(&self, name: &ColumnName) -> Option<Column> {
         self.left
             .column_index(name)
-            .or_else(|| self.right.column_index(name))
+            .or_else(|| match self.right.column_index(name) {
+                None => None,
+                Some(c) => {
+                    let col = Column::from_index(c.get_index() + self.left.number_of_columns());
+                    Some(col)
+                }
+            })
     }
     fn get(&self, row: &Row, column: &Column) -> &Value {
         if column.get_index() < self.left.number_of_columns() {

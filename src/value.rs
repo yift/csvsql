@@ -1,8 +1,9 @@
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, hash::Hash, str::FromStr};
 
 use bigdecimal::{BigDecimal, FromPrimitive};
 use chrono::{NaiveDate, NaiveDateTime};
 
+#[derive(Debug)]
 pub enum Value {
     Str(String),
     Float(f64),
@@ -71,6 +72,79 @@ impl From<&str> for Value {
         Value::Str(value.to_string())
     }
 }
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Value::Str(me) => match other {
+                Value::Str(other) => me == other,
+                _ => false,
+            },
+            Value::Int(me) => match other {
+                Value::Int(other) => me == other,
+                _ => false,
+            },
+            Value::BigDecimal(me) => match other {
+                Value::BigDecimal(other) => me == other,
+                _ => false,
+            },
+            Value::Bool(me) => match other {
+                Value::Bool(other) => me == other,
+                _ => false,
+            },
+            Value::Timestamp(me) => match other {
+                Value::Timestamp(other) => me == other,
+                _ => false,
+            },
+            Value::Date(me) => match other {
+                Value::Date(other) => me == other,
+                _ => false,
+            },
+            Value::Empty => matches!(other, Value::Empty),
+            Value::Float(me) => match other {
+                Value::Float(other) => me == other,
+                _ => false,
+            },
+        }
+    }
+}
+
+impl Eq for Value {}
+
+impl Hash for Value {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Value::Empty => state.write_i8(1),
+            Value::Bool(true) => state.write_i8(2),
+            Value::Bool(false) => state.write_i8(3),
+            Value::Int(i) => {
+                state.write_i8(4);
+                i.hash(state);
+            }
+            Value::Str(str) => {
+                state.write_i8(5);
+                str.hash(state);
+            }
+            Value::BigDecimal(b) => {
+                state.write_i8(6);
+                b.hash(state);
+            }
+            Value::Date(b) => {
+                state.write_i8(7);
+                b.hash(state);
+            }
+            Value::Timestamp(b) => {
+                state.write_i8(8);
+                b.hash(state);
+            }
+            Value::Float(f) => {
+                state.write_i8(8);
+                state.write_u64(f.to_bits())
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
 

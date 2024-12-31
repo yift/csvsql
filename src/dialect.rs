@@ -22,6 +22,12 @@ impl Dialect for FilesDialect {
         if ch == ',' {
             return false;
         }
+        if ch == '(' {
+            return false;
+        }
+        if ch == ')' {
+            return false;
+        }
         true
     }
     fn is_identifier_part(&self, ch: char) -> bool {
@@ -38,6 +44,12 @@ impl Dialect for FilesDialect {
             return false;
         }
         if ch == ',' {
+            return false;
+        }
+        if ch == '(' {
+            return false;
+        }
+        if ch == ')' {
             return false;
         }
         true

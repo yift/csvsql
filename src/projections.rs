@@ -47,7 +47,7 @@ impl ResultSet for ResultsWithProjections {
             .get(column.get_index())
             .map(|projection| projection.name().clone())
     }
-    fn column_index(&self, name: &ColumnName) -> Option<&Column> {
+    fn column_index(&self, name: &ColumnName) -> Option<Column> {
         if let Some(projections) = self.names.get(name.name()) {
             for idx in projections {
                 if self.projections[idx.get_index()]
@@ -55,7 +55,7 @@ impl ResultSet for ResultsWithProjections {
                     .parent()
                     .matches(name.parent())
                 {
-                    return Some(idx);
+                    return Some(idx.clone());
                 }
             }
         }
@@ -170,7 +170,7 @@ impl Convert for ColumnName {
         let Some(column) = parent.column_index(self) else {
             return Err(CdvSqlError::NoSuchColumn(self.name().into()));
         };
-        let Some(column_name) = parent.column_name(column) else {
+        let Some(column_name) = parent.column_name(&column) else {
             return Err(CdvSqlError::NoSuchColumn(self.name().into()));
         };
         let projection = Box::new(ColumnProjection {
