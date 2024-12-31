@@ -2,6 +2,7 @@ use std::{fmt::Display, rc::Rc};
 
 use crate::value::Value;
 
+#[derive(Clone)]
 pub struct Row {
     row: usize,
 }
@@ -14,6 +15,8 @@ impl Row {
         Self { row }
     }
 }
+
+#[derive(Clone)]
 pub struct Column {
     column: usize,
 }
@@ -44,7 +47,7 @@ impl ResultName {
     }
     pub fn append(&self, name: &str) -> Self {
         let mut elements = self.elements.clone();
-        let name = name.to_uppercase();
+        let name = name.to_string();
         elements.push(name);
         Self { elements }
     }
@@ -77,7 +80,13 @@ impl ColumnName {
     pub fn new(parent: &Rc<ResultName>, name: &str) -> Self {
         Self {
             parent: parent.clone(),
-            name: name.to_uppercase(),
+            name: name.to_string(),
+        }
+    }
+    pub fn simple(name: &str) -> Self {
+        Self {
+            parent: Rc::new(ResultName::root()),
+            name: name.to_string(),
         }
     }
 

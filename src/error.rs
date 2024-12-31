@@ -18,4 +18,6 @@ pub enum CdvSqlError {
     Unsupported(String),
     #[error("TODO: `{0}`")]
     ToDo(String),
+    #[error("Cannot find columns: `{0}`")]
+    NoSuchColumn(String),
 }

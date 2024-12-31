@@ -1,4 +1,4 @@
-use sqlparser::ast::{SelectItem, WildcardAdditionalOptions};
+use sqlparser::ast::{Expr, SelectItem, WildcardAdditionalOptions};
 
 use crate::error::CdvSqlError;
 use crate::results::ResultName;
@@ -99,6 +99,7 @@ impl Convert for SelectItem {
     fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
         match self {
             SelectItem::Wildcard(options) => options.convert(parent),
+            SelectItem::UnnamedExpr(exp) => exp.convert(parent),
             _ => Err(CdvSqlError::ToDo(format!("Select {}", self))),
         }
     }
@@ -134,5 +135,29 @@ impl Convert for WildcardAdditionalOptions {
         }
 
         Ok(projections)
+    }
+}
+impl Convert for Expr {
+    fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+        match self {
+            Expr::Identifier(ident) => {
+                let name = &ColumnName::simple(&ident.value);
+                let Some(column) = parent.column_index(name) else {
+                    return Err(CdvSqlError::NoSuchColumn(ident.value.to_string()));
+                };
+                let Some(column_name) = parent.column_name(column) else {
+                    return Err(CdvSqlError::NoSuchColumn(ident.value.to_string()));
+                };
+                let projection = Box::new(ColumnProjection {
+                    column: column.clone(),
+                    column_name,
+                });
+                Ok(vec![projection])
+            }
+            _ => Err(CdvSqlError::ToDo(format!(
+                "Select expression like {}",
+                self
+            ))),
+        }
     }
 }

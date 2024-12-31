@@ -20,7 +20,7 @@ struct FileColumn {
 impl FileColumn {
     fn new(header: Option<&str>, index: usize) -> Self {
         let column_index = FileColumn::get_default_header(index);
-        let header = header.map(str::to_uppercase);
+        let header = header.map(str::to_string);
         FileColumn {
             header,
             column_index,
