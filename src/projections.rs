@@ -141,23 +141,42 @@ impl Convert for Expr {
     fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
         match self {
             Expr::Identifier(ident) => {
-                let name = &ColumnName::simple(&ident.value);
-                let Some(column) = parent.column_index(name) else {
-                    return Err(CdvSqlError::NoSuchColumn(ident.value.to_string()));
-                };
-                let Some(column_name) = parent.column_name(column) else {
-                    return Err(CdvSqlError::NoSuchColumn(ident.value.to_string()));
-                };
-                let projection = Box::new(ColumnProjection {
-                    column: column.clone(),
-                    column_name,
-                });
-                Ok(vec![projection])
+                let name = ColumnName::simple(&ident.value);
+                name.convert(parent)
+            }
+            Expr::CompoundIdentifier(idents) => {
+                let mut root = ResultName::root();
+                let mut names = idents.iter().peekable();
+                while let Some(name) = names.next() {
+                    if names.peek().is_none() {
+                        let name = ColumnName::new(&Rc::new(root), &name.value);
+
+                        return name.convert(parent);
+                    } else {
+                        root = root.append(&name.value);
+                    }
+                }
+                Err(CdvSqlError::NoSelect)
             }
             _ => Err(CdvSqlError::ToDo(format!(
                 "Select expression like {}",
                 self
             ))),
         }
+    }
+}
+impl Convert for ColumnName {
+    fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+        let Some(column) = parent.column_index(self) else {
+            return Err(CdvSqlError::NoSuchColumn(self.name().into()));
+        };
+        let Some(column_name) = parent.column_name(column) else {
+            return Err(CdvSqlError::NoSuchColumn(self.name().into()));
+        };
+        let projection = Box::new(ColumnProjection {
+            column: column.clone(),
+            column_name,
+        });
+        Ok(vec![projection])
     }
 }

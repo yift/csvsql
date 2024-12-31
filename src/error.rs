@@ -20,4 +20,6 @@ pub enum CdvSqlError {
     ToDo(String),
     #[error("Cannot find columns: `{0}`")]
     NoSuchColumn(String),
+    #[error("Nothing to select")]
+    NoSelect,
 }
