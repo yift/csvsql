@@ -137,12 +137,22 @@ impl Convert for WildcardAdditionalOptions {
         Ok(projections)
     }
 }
-impl Convert for Expr {
+trait SingleConvert {
+    fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError>;
+}
+
+impl<T: SingleConvert> Convert for T {
     fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+        let result = self.convert_single(parent)?;
+        Ok(vec![result])
+    }
+}
+impl SingleConvert for Expr {
+    fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError> {
         match self {
             Expr::Identifier(ident) => {
                 let name = ColumnName::simple(&ident.value);
-                name.convert(parent)
+                name.convert_single(parent)
             }
             Expr::CompoundIdentifier(idents) => {
                 let mut root = ResultName::root();
@@ -151,7 +161,7 @@ impl Convert for Expr {
                     if names.peek().is_none() {
                         let name = ColumnName::new(&Rc::new(root), &name.value);
 
-                        return name.convert(parent);
+                        return name.convert_single(parent);
                     } else {
                         root = root.append(&name.value);
                     }
@@ -165,8 +175,8 @@ impl Convert for Expr {
         }
     }
 }
-impl Convert for ColumnName {
-    fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+impl SingleConvert for ColumnName {
+    fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError> {
         let Some(column) = parent.column_index(self) else {
             return Err(CdvSqlError::NoSuchColumn(self.name().into()));
         };
@@ -177,6 +187,6 @@ impl Convert for ColumnName {
             column: column.clone(),
             column_name,
         });
-        Ok(vec![projection])
+        Ok(projection)
     }
 }
