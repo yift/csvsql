@@ -897,3 +897,69 @@ fn test_select_with_plus() -> Result<(), CdvSqlError> {
 
     Ok(())
 }
+#[test]
+fn test_use_literal() -> Result<(), CdvSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let results = engine.execute_commands(
+        "SELECT id, \"tax percentage\", 100* \"tax percentage\"  FROM tests.data.sales;",
+    )?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.first().unwrap();
+
+    assert_eq!(results.number_of_columns(), 3);
+
+    assert_eq!(
+        results.column_name(&Column::from_index(0)).unwrap().name(),
+        "id"
+    );
+    assert_eq!(
+        results.column_name(&Column::from_index(1)).unwrap().name(),
+        "tax percentage"
+    );
+    assert_eq!(
+        results.column_name(&Column::from_index(2)).unwrap().name(),
+        "100 * tax percentage"
+    );
+
+    let mut taxes = HashMap::new();
+    for data in get_sales() {
+        taxes.insert(data.id.clone(), data.tax_percentage);
+    }
+    assert_eq!(results.number_of_rows(), taxes.len());
+
+    for row in results.rows() {
+        let id = results.value(&row, &ColumnName::simple("id")).to_string();
+        let tax = match results
+            .value(&row, &ColumnName::simple("tax percentage"))
+            .deref()
+        {
+            Value::BigDecimal(b) => b.to_f64().unwrap(),
+            Value::Float(f) => *f,
+            _ => 0.1,
+        };
+        let tax_times_100 = match results
+            .value(&row, &ColumnName::simple("100 * tax percentage"))
+            .deref()
+        {
+            Value::BigDecimal(b) => b.to_f64().unwrap(),
+            Value::Float(f) => *f,
+            _ => 0.1,
+        };
+
+        let actual_tax = taxes.remove(&id).unwrap();
+        let diff = (actual_tax - tax).abs();
+        assert!(diff < 0.01);
+        let diff_two = (actual_tax * 100.0 - tax_times_100).abs();
+        assert!(diff_two < 0.01);
+    }
+    assert!(taxes.is_empty());
+
+    Ok(())
+}

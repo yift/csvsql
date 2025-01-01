@@ -1,7 +1,7 @@
 use std::{
     fmt::Display,
     hash::Hash,
-    ops::{Add, Deref},
+    ops::{Add, Deref, Mul},
     str::FromStr,
 };
 
@@ -190,6 +190,18 @@ impl Add for &Value {
             return Value::Empty;
         };
         (me.deref() + other.deref()).into()
+    }
+}
+impl Mul for &Value {
+    type Output = Value;
+    fn mul(self, rhs: Self) -> Self::Output {
+        let Some(me) = self.as_number() else {
+            return Value::Empty;
+        };
+        let Some(other) = rhs.as_number() else {
+            return Value::Empty;
+        };
+        (me.deref() * other.deref()).into()
     }
 }
 

@@ -7,10 +7,10 @@ use crate::{
     results::{Column, ColumnName, ResultSet, Row},
     value::Value,
 };
+use sqlparser::ast::Value as AstValue;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
-
 trait Projection {
     fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value>;
     fn name(&self) -> SmartReference<'_, ColumnName>;
@@ -174,6 +174,22 @@ impl BinaryFunction for Plus {
         true
     }
 }
+struct Times {}
+impl BinaryFunction for Times {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        (left.deref() * right.deref()).into()
+    }
+    fn name(&self) -> &str {
+        "*"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
 
 struct AliasProjection {
     data: Box<dyn Projection>,
@@ -224,6 +240,19 @@ impl<T: SingleConvert> Convert for T {
         Ok(vec![result])
     }
 }
+struct ValueProjection {
+    value: Value,
+    name: String,
+}
+impl Projection for ValueProjection {
+    fn get<'a>(&'a self, _: &'a dyn ResultSet, _: &Row) -> SmartReference<'a, Value> {
+        SmartReference::Borrowed(&self.value)
+    }
+    fn name(&self) -> SmartReference<'_, ColumnName> {
+        let name = ColumnName::simple(&self.name);
+        name.into()
+    }
+}
 impl SingleConvert for Expr {
     fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError> {
         match self {
@@ -248,8 +277,9 @@ impl SingleConvert for Expr {
             Expr::BinaryOp { left, op, right } => {
                 let left = left.convert_single(parent)?;
                 let right = right.convert_single(parent)?;
-                let operator = match op {
-                    BinaryOperator::Plus => Plus {},
+                let operator: Box<dyn BinaryFunction> = match op {
+                    BinaryOperator::Plus => Box::new(Plus {}),
+                    BinaryOperator::Multiply => Box::new(Times {}),
                     _ => {
                         return Err(CdvSqlError::ToDo(format!("Operator: {}", op)));
                     }
@@ -257,8 +287,26 @@ impl SingleConvert for Expr {
                 Ok(Box::new(BinaryProjection {
                     left,
                     right,
-                    operator: Box::new(operator),
+                    operator,
                 }))
+            }
+            Expr::Value(val) => {
+                let name = self.to_string();
+                match val {
+                    AstValue::Number(num, _) => {
+                        let value = Value::BigDecimal(num.clone());
+                        Ok(Box::new(ValueProjection { value, name }))
+                    }
+                    AstValue::Boolean(b) => {
+                        let value = Value::Bool(*b);
+                        Ok(Box::new(ValueProjection { value, name }))
+                    }
+                    AstValue::SingleQuotedString(s) => {
+                        let value = s.as_str().into();
+                        Ok(Box::new(ValueProjection { value, name }))
+                    }
+                    _ => Err(CdvSqlError::ToDo(format!("Select literal value {}", self))),
+                }
             }
             _ => Err(CdvSqlError::ToDo(format!(
                 "Select expression like {}",
