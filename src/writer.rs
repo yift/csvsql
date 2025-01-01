@@ -55,6 +55,7 @@ mod tests {
     use crate::results::ColumnName;
     use crate::results::ResultName;
     use crate::results::Row;
+    use crate::util::SmartReference;
     use crate::value::Value;
     use std::rc::Rc;
 
@@ -80,11 +81,12 @@ mod tests {
             fn result_name(&self) -> Option<&Rc<ResultName>> {
                 None
             }
-            fn get(&self, row: &Row, column: &Column) -> &Value {
+            fn get(&self, row: &Row, column: &Column) -> SmartReference<Value> {
                 self.values
                     .get(column.get_index())
                     .and_then(|v| v.get(row.get_index()))
                     .unwrap_or(&Value::Empty)
+                    .into()
             }
         }
         let mut values = Vec::new();

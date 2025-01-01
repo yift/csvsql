@@ -1,6 +1,6 @@
 use std::{fmt::Display, rc::Rc};
 
-use crate::value::Value;
+use crate::{util::SmartReference, value::Value};
 
 #[derive(Clone)]
 pub struct Row {
@@ -112,12 +112,12 @@ pub trait ResultSet {
     fn column_name(&self, column: &Column) -> Option<ColumnName>;
     fn column_index(&self, name: &ColumnName) -> Option<Column>;
     fn result_name(&self) -> Option<&Rc<ResultName>>;
-    fn get(&self, row: &Row, column: &Column) -> &Value;
+    fn get(&self, row: &Row, column: &Column) -> SmartReference<Value>;
 
-    fn value(&self, row: &Row, name: &ColumnName) -> &Value {
+    fn value(&self, row: &Row, name: &ColumnName) -> SmartReference<Value> {
         match self.column_index(name) {
             Some(column) => self.get(row, &column),
-            None => &Value::Empty,
+            None => Value::Empty.into(),
         }
     }
     fn rows(&self) -> Box<dyn Iterator<Item = Row>> {

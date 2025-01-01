@@ -10,6 +10,7 @@ use crate::results::Column;
 use crate::results::ColumnName;
 use crate::results::ResultName;
 use crate::results::Row;
+use crate::util::SmartReference;
 use crate::{results::ResultSet, value::Value};
 
 struct FileColumn {
@@ -104,11 +105,12 @@ impl ResultSet for FileResultSet {
             None
         }
     }
-    fn get(&self, row: &Row, column: &Column) -> &Value {
+    fn get(&self, row: &Row, column: &Column) -> SmartReference<Value> {
         self.data
             .get(row.get_index())
             .and_then(|l| l.get(column.get_index()))
             .unwrap_or(&Value::Empty)
+            .into()
     }
 }
 

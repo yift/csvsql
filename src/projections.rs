@@ -2,6 +2,7 @@ use sqlparser::ast::{Expr, SelectItem, WildcardAdditionalOptions};
 
 use crate::error::CdvSqlError;
 use crate::results::ResultName;
+use crate::util::SmartReference;
 use crate::{
     results::{Column, ColumnName, ResultSet, Row},
     value::Value,
@@ -10,7 +11,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 trait Projection {
-    fn get<'a>(&self, results: &'a dyn ResultSet, row: &Row) -> &'a Value;
+    fn get<'a>(&self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value>;
     fn name(&self) -> &ColumnName;
 }
 struct ColumnProjection {
@@ -18,7 +19,7 @@ struct ColumnProjection {
     column_name: ColumnName,
 }
 impl Projection for ColumnProjection {
-    fn get<'a>(&self, results: &'a dyn ResultSet, row: &Row) -> &'a Value {
+    fn get<'a>(&self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
         results.get(row, &self.column)
     }
     fn name(&self) -> &ColumnName {
@@ -62,11 +63,11 @@ impl ResultSet for ResultsWithProjections {
         None
     }
 
-    fn get(&self, row: &Row, column: &Column) -> &Value {
+    fn get(&self, row: &Row, column: &Column) -> SmartReference<Value> {
         self.projections
             .get(column.get_index())
             .map(|p| p.get(&*self.results, row))
-            .unwrap_or(&Value::Empty)
+            .unwrap_or(Value::Empty.into())
     }
 }
 

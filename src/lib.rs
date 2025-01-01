@@ -8,5 +8,6 @@ mod file_results;
 mod named_results;
 mod projections;
 pub mod results;
+pub mod util;
 pub mod value;
 pub mod writer;

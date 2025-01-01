@@ -6,6 +6,7 @@ use crate::results::Column;
 use crate::results::ResultName;
 use crate::results::Row;
 use crate::results::{ColumnName, ResultSet};
+use crate::util::SmartReference;
 use crate::value::Value;
 
 struct NamedResultSet {
@@ -37,7 +38,7 @@ impl ResultSet for NamedResultSet {
         }
     }
 
-    fn get(&self, row: &Row, column: &Column) -> &Value {
+    fn get(&self, row: &Row, column: &Column) -> SmartReference<Value> {
         self.results.get(row, column)
     }
     fn result_name(&self) -> Option<&Rc<ResultName>> {

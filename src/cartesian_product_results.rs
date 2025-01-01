@@ -3,6 +3,7 @@ use crate::results::ColumnName;
 use crate::results::ResultName;
 use crate::results::ResultSet;
 use crate::results::Row;
+use crate::util::SmartReference;
 use crate::value::Value;
 use std::rc::Rc;
 struct ProductResults {
@@ -34,7 +35,7 @@ impl ResultSet for ProductResults {
                 }
             })
     }
-    fn get(&self, row: &Row, column: &Column) -> &Value {
+    fn get(&self, row: &Row, column: &Column) -> SmartReference<Value> {
         if column.get_index() < self.left.number_of_columns() {
             let row = &Row::from_index(row.get_index() / self.right.number_of_rows());
             self.left.get(row, column)

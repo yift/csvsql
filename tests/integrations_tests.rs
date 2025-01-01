@@ -221,7 +221,7 @@ fn test_select_all() -> Result<(), CdvSqlError> {
             let row = Row::from_index(row_index);
             let name = ColumnName::simple(name);
             let actual_value = results.value(&row, &name);
-            assert_eq!(expected_value, actual_value);
+            assert_eq!(*expected_value, *actual_value);
         }
     }
     Ok(())
@@ -273,9 +273,9 @@ fn test_select_fields() -> Result<(), CdvSqlError> {
                 || name.name() == "active"
                 || name.name() == "email"
             {
-                assert_eq!(expected_value, actual_value);
+                assert_eq!(*expected_value, *actual_value);
             } else {
-                assert_eq!(&Value::Empty, actual_value);
+                assert_eq!(Value::Empty, *actual_value);
             }
         }
     }
@@ -320,9 +320,9 @@ fn test_cartesian_product() -> Result<(), CdvSqlError> {
         .map(|(_, data)| data)
         .collect();
     let mut expected_results = HashSet::new();
-    for name in names {
+    for name in &names {
         for id in &ids {
-            expected_results.insert((name, *id));
+            expected_results.insert(((*name).into(), (*id).into()));
         }
     }
     assert_eq!(results.number_of_rows(), expected_results.len());
