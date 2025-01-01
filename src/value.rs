@@ -1,7 +1,15 @@
-use std::{fmt::Display, hash::Hash, str::FromStr};
+use std::{
+    fmt::Display,
+    hash::Hash,
+    ops::{Add, Deref},
+    str::FromStr,
+};
 
-use bigdecimal::{BigDecimal, FromPrimitive};
+use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
 use chrono::{NaiveDate, NaiveDateTime};
+use thiserror::Error;
+
+use crate::util::SmartReference;
 
 #[derive(Debug)]
 pub enum Value {
@@ -35,6 +43,37 @@ impl Display for Value {
         }
     }
 }
+impl From<BigDecimal> for Value {
+    fn from(decimal: BigDecimal) -> Self {
+        let str = decimal.to_string();
+        if let Ok(i) = i64::from_str(&str) {
+            if let Some(other_decimal) = BigDecimal::from_i64(i) {
+                if decimal == other_decimal {
+                    return Value::Int(i);
+                }
+            }
+        }
+        if let Ok(f) = f64::from_str(&str) {
+            if let Some(other_decimal) = BigDecimal::from_f64(f) {
+                if decimal == other_decimal {
+                    return Value::Float(f);
+                }
+            }
+        }
+        Value::BigDecimal(decimal)
+    }
+}
+
+impl Value {
+    fn as_number(&self) -> Option<SmartReference<'_, BigDecimal>> {
+        match self {
+            Value::BigDecimal(bc) => Some(bc.into()),
+            Value::Float(f) => BigDecimal::from_f64(*f).map(|f| f.into()),
+            Value::Int(i) => BigDecimal::from_i64(*i).map(|f| f.into()),
+            _ => None,
+        }
+    }
+}
 impl From<&str> for Value {
     fn from(value: &str) -> Self {
         if value.is_empty() {
@@ -53,21 +92,7 @@ impl From<&str> for Value {
             return Value::Date(date);
         }
         if let Ok(decimal) = BigDecimal::from_str(value) {
-            if let Ok(i) = i64::from_str(value) {
-                if let Some(other_decimal) = BigDecimal::from_i64(i) {
-                    if decimal == other_decimal {
-                        return Value::Int(i);
-                    }
-                }
-            }
-            if let Ok(f) = f64::from_str(value) {
-                if let Some(other_decimal) = BigDecimal::from_f64(f) {
-                    if decimal == other_decimal {
-                        return Value::Float(f);
-                    }
-                }
-            }
-            return Value::BigDecimal(decimal);
+            return decimal.into();
         }
         Value::Str(value.to_string())
     }
@@ -82,10 +107,24 @@ impl PartialEq for Value {
             },
             Value::Int(me) => match other {
                 Value::Int(other) => me == other,
+                Value::BigDecimal(bc) => {
+                    BigDecimal::from_i64(*me).map(|b| b == *bc).unwrap_or(false)
+                }
+                Value::Float(f) => me.to_f64().map(|b| b == *f).unwrap_or(false),
                 _ => false,
             },
             Value::BigDecimal(me) => match other {
                 Value::BigDecimal(other) => me == other,
+                Value::Int(i) => BigDecimal::from_i64(*i).map(|i| i == *me).unwrap_or(false),
+                Value::Float(f) => BigDecimal::from_f64(*f).map(|f| f == *me).unwrap_or(false),
+                _ => false,
+            },
+            Value::Float(me) => match other {
+                Value::Float(other) => me == other,
+                Value::BigDecimal(bc) => {
+                    BigDecimal::from_f64(*me).map(|b| b == *bc).unwrap_or(false)
+                }
+                Value::Int(i) => i.to_f64().map(|i| i == *me).unwrap_or(false),
                 _ => false,
             },
             Value::Bool(me) => match other {
@@ -101,10 +140,6 @@ impl PartialEq for Value {
                 _ => false,
             },
             Value::Empty => matches!(other, Value::Empty),
-            Value::Float(me) => match other {
-                Value::Float(other) => me == other,
-                _ => false,
-            },
         }
     }
 }
@@ -143,6 +178,25 @@ impl Hash for Value {
             }
         }
     }
+}
+
+impl Add for &Value {
+    type Output = Value;
+    fn add(self, rhs: Self) -> Self::Output {
+        let Some(me) = self.as_number() else {
+            return Value::Empty;
+        };
+        let Some(other) = rhs.as_number() else {
+            return Value::Empty;
+        };
+        (me.deref() + other.deref()).into()
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ValueError {
+    #[error("Not a number")]
+    NotANumber,
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use sqlparser::ast::{Expr, SelectItem, WildcardAdditionalOptions};
+use sqlparser::ast::{BinaryOperator, Expr, SelectItem, WildcardAdditionalOptions};
 
 use crate::error::CdvSqlError;
 use crate::results::ResultName;
@@ -8,22 +8,23 @@ use crate::{
     value::Value,
 };
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::rc::Rc;
 
 trait Projection {
-    fn get<'a>(&self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value>;
-    fn name(&self) -> &ColumnName;
+    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value>;
+    fn name(&self) -> SmartReference<'_, ColumnName>;
 }
 struct ColumnProjection {
     column: Column,
     column_name: ColumnName,
 }
 impl Projection for ColumnProjection {
-    fn get<'a>(&self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
         results.get(row, &self.column)
     }
-    fn name(&self) -> &ColumnName {
-        &self.column_name
+    fn name(&self) -> SmartReference<'_, ColumnName> {
+        SmartReference::Borrowed(&self.column_name)
     }
 }
 
@@ -101,6 +102,11 @@ impl Convert for SelectItem {
         match self {
             SelectItem::Wildcard(options) => options.convert(parent),
             SelectItem::UnnamedExpr(exp) => exp.convert(parent),
+            SelectItem::ExprWithAlias { expr, alias } => {
+                let data = expr.convert_single(parent)?;
+                let alias = ColumnName::simple(&alias.value);
+                Ok(vec![Box::new(AliasProjection { data, alias })])
+            }
             _ => Err(CdvSqlError::ToDo(format!("Select {}", self))),
         }
     }
@@ -142,6 +148,76 @@ trait SingleConvert {
     fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError>;
 }
 
+trait BinaryFunction {
+    fn calculate(
+        &self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<Value>;
+    fn name(&self) -> &str;
+    fn is_operator(&self) -> bool;
+}
+
+struct Plus {}
+impl BinaryFunction for Plus {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        (left.deref() + right.deref()).into()
+    }
+    fn name(&self) -> &str {
+        "+"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+
+struct AliasProjection {
+    data: Box<dyn Projection>,
+    alias: ColumnName,
+}
+impl Projection for AliasProjection {
+    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
+        self.data.get(results, row)
+    }
+    fn name(&self) -> SmartReference<'_, ColumnName> {
+        SmartReference::Borrowed(&self.alias)
+    }
+}
+struct BinaryProjection {
+    left: Box<dyn Projection>,
+    right: Box<dyn Projection>,
+    operator: Box<dyn BinaryFunction>,
+}
+impl Projection for BinaryProjection {
+    fn name(&self) -> SmartReference<ColumnName> {
+        let name = if self.operator.is_operator() {
+            format!(
+                "{} {} {}",
+                self.left.name(),
+                self.operator.name(),
+                self.right.name()
+            )
+        } else {
+            format!(
+                "{}({}, {})",
+                self.operator.name(),
+                self.left.name(),
+                self.right.name()
+            )
+        };
+        ColumnName::simple(&name).into()
+    }
+    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
+        let left = self.left.get(results, row);
+        let right = self.right.get(results, row);
+        self.operator.calculate(left, right)
+    }
+}
+
 impl<T: SingleConvert> Convert for T {
     fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
         let result = self.convert_single(parent)?;
@@ -168,6 +244,21 @@ impl SingleConvert for Expr {
                     }
                 }
                 Err(CdvSqlError::NoSelect)
+            }
+            Expr::BinaryOp { left, op, right } => {
+                let left = left.convert_single(parent)?;
+                let right = right.convert_single(parent)?;
+                let operator = match op {
+                    BinaryOperator::Plus => Plus {},
+                    _ => {
+                        return Err(CdvSqlError::ToDo(format!("Operator: {}", op)));
+                    }
+                };
+                Ok(Box::new(BinaryProjection {
+                    left,
+                    right,
+                    operator: Box::new(operator),
+                }))
             }
             _ => Err(CdvSqlError::ToDo(format!(
                 "Select expression like {}",

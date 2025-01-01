@@ -4,55 +4,22 @@ use sqlparser::dialect::Dialect;
 pub struct FilesDialect {}
 impl Dialect for FilesDialect {
     fn is_identifier_start(&self, ch: char) -> bool {
-        if ch.is_whitespace() {
-            return false;
-        }
         if ch.is_numeric() {
             return false;
         }
-        if ch == ';' {
-            return false;
-        }
-        if ch.is_control() {
-            return false;
-        }
-        if ch == '.' {
-            return false;
-        }
-        if ch == ',' {
-            return false;
-        }
-        if ch == '(' {
-            return false;
-        }
-        if ch == ')' {
-            return false;
-        }
-        true
+        self.is_identifier_part(ch)
     }
     fn is_identifier_part(&self, ch: char) -> bool {
-        if ch.is_whitespace() {
-            return false;
+        if ch.is_alphanumeric() {
+            return true;
         }
-        if ch == ';' {
-            return false;
+        if ch == '_' {
+            return true;
         }
-        if ch == '.' {
-            return false;
+        if ch == '$' {
+            return true;
         }
-        if ch.is_control() {
-            return false;
-        }
-        if ch == ',' {
-            return false;
-        }
-        if ch == '(' {
-            return false;
-        }
-        if ch == ')' {
-            return false;
-        }
-        true
+        false
     }
 
     fn supports_numeric_prefix(&self) -> bool {

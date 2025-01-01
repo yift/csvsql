@@ -1,4 +1,7 @@
-use std::hash::Hash;
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+};
 
 pub enum SmartReference<'a, T> {
     Borrowed(&'a T),
@@ -56,6 +59,23 @@ impl<T: Hash> Hash for SmartReference<'_, T> {
         match self {
             Self::Borrowed(v) => v.hash(state),
             Self::Owned(v) => v.hash(state),
+        }
+    }
+}
+
+impl<T: Debug> Debug for SmartReference<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Borrowed(b) => b.fmt(f),
+            Self::Owned(b) => b.fmt(f),
+        }
+    }
+}
+impl<T: Display> Display for SmartReference<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Borrowed(b) => b.fmt(f),
+            Self::Owned(b) => b.fmt(f),
         }
     }
 }

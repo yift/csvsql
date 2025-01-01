@@ -170,24 +170,4 @@ mod tests {
 
         assert!(!first.matches(&second));
     }
-
-    /*
-        pub fn matches(&self, other: &Self) -> bool {
-        // self can be longer then other
-        if let Some(other_name) = other.elements.last() {
-            if let Some(my_name) = self.elements.last() {
-                if my_name == other_name {
-                    self.parent().matches(&other.parent())
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        } else {
-            true
-        }
-    }
-
-     */
 }
