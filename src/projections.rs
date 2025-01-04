@@ -190,6 +190,54 @@ impl BinaryFunction for Times {
         true
     }
 }
+struct Divide {}
+impl BinaryFunction for Divide {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        (left.deref() / right.deref()).into()
+    }
+    fn name(&self) -> &str {
+        "/"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+struct TakeAway {}
+impl BinaryFunction for TakeAway {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        (left.deref() - right.deref()).into()
+    }
+    fn name(&self) -> &str {
+        "-"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+struct Modulu {}
+impl BinaryFunction for Modulu {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        (left.deref() % right.deref()).into()
+    }
+    fn name(&self) -> &str {
+        "%"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
 
 struct AliasProjection {
     data: Box<dyn Projection>,
@@ -280,6 +328,9 @@ impl SingleConvert for Expr {
                 let operator: Box<dyn BinaryFunction> = match op {
                     BinaryOperator::Plus => Box::new(Plus {}),
                     BinaryOperator::Multiply => Box::new(Times {}),
+                    BinaryOperator::Divide => Box::new(Divide {}),
+                    BinaryOperator::Minus => Box::new(TakeAway {}),
+                    BinaryOperator::Modulo => Box::new(Modulu {}),
                     _ => {
                         return Err(CdvSqlError::ToDo(format!("Operator: {}", op)));
                     }

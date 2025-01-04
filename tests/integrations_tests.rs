@@ -1,3 +1,4 @@
+use core::panic;
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
@@ -899,6 +900,7 @@ fn test_select_with_plus() -> Result<(), CdvSqlError> {
 
     Ok(())
 }
+
 #[test]
 fn test_use_literal() -> Result<(), CdvSqlError> {
     let args = Args {
@@ -960,6 +962,50 @@ fn test_use_literal() -> Result<(), CdvSqlError> {
         assert!(diff_two < 0.01);
     }
     assert!(taxes.is_empty());
+
+    Ok(())
+}
+
+#[test]
+fn test_basic_arithmetic() -> Result<(), CdvSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let results = engine.execute_commands(
+        "SELECT 3.14 as pi, 4 * 2.2 as eight_dot_eight, 2-10 as minus_eight, 1.2/.3 as four, 20 % 6 as two, 0/0 as nothing, 2 + 3 * 5 - 7 as ten, 0 % 0 as more_nothing FROM tests.data.sales;",
+    )?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.first().unwrap();
+
+    assert_eq!(results.number_of_columns(), 8);
+
+    assert_eq!(results.number_of_rows(), get_sales().len());
+
+    for row in results.rows() {
+        let mut data = HashMap::new();
+        for col in results.columns() {
+            let name = results.column_name(&col).unwrap();
+            let value = match results.get(&row, &col).deref() {
+                Value::Number(num) => num.to_f32().unwrap(),
+                Value::Empty => -100.0,
+                _ => panic!("Unexpected value: "),
+            };
+            data.insert(name.name().to_string(), value);
+        }
+        assert_eq!(*data.get("pi").unwrap_or(&-200.0), 3.14);
+        assert_eq!(*data.get("eight_dot_eight").unwrap_or(&-200.0), 8.8);
+        assert_eq!(*data.get("minus_eight").unwrap_or(&-200.0), -8.0);
+        assert_eq!(*data.get("four").unwrap_or(&-200.0), 4.0);
+        assert_eq!(*data.get("two").unwrap_or(&-200.0), 2.0);
+        assert_eq!(*data.get("ten").unwrap_or(&-200.0), 10.0);
+        assert_eq!(*data.get("nothing").unwrap_or(&-200.0), -100.0);
+        assert_eq!(*data.get("more_nothing").unwrap_or(&-200.0), -100.0);
+    }
 
     Ok(())
 }

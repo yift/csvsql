@@ -1,11 +1,12 @@
 use std::{
     fmt::Display,
     hash::Hash,
-    ops::{Add, Deref, Mul},
+    ops::{Add, Deref, Div, Mul, Rem, Sub},
     str::FromStr,
 };
 
 use bigdecimal::BigDecimal;
+use bigdecimal::Zero;
 use chrono::{NaiveDate, NaiveDateTime};
 use thiserror::Error;
 
@@ -99,6 +100,51 @@ impl Mul for &Value {
             return Value::Empty;
         };
         (me.deref() * other.deref()).into()
+    }
+}
+
+impl Div for &Value {
+    type Output = Value;
+    fn div(self, rhs: Self) -> Self::Output {
+        let Some(me) = self.as_number() else {
+            return Value::Empty;
+        };
+        let Some(other) = rhs.as_number() else {
+            return Value::Empty;
+        };
+        if other.is_zero() {
+            return Value::Empty;
+        }
+        (me.deref() / other.deref()).into()
+    }
+}
+
+impl Sub for &Value {
+    type Output = Value;
+    fn sub(self, rhs: Self) -> Self::Output {
+        let Some(me) = self.as_number() else {
+            return Value::Empty;
+        };
+        let Some(other) = rhs.as_number() else {
+            return Value::Empty;
+        };
+        (me.deref() - other.deref()).into()
+    }
+}
+
+impl Rem for &Value {
+    type Output = Value;
+    fn rem(self, rhs: Self) -> Self::Output {
+        let Some(me) = self.as_number() else {
+            return Value::Empty;
+        };
+        let Some(other) = rhs.as_number() else {
+            return Value::Empty;
+        };
+        if other.is_zero() {
+            return Value::Empty;
+        }
+        (me.deref() % other.deref()).into()
     }
 }
 

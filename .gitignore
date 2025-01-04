@@ -8,3 +8,5 @@ target/
 .idea/
 
 /target
+
+tarpaulin-report.html
