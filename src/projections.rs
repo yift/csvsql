@@ -294,7 +294,7 @@ impl SingleConvert for Expr {
                 let name = self.to_string();
                 match val {
                     AstValue::Number(num, _) => {
-                        let value = Value::BigDecimal(num.clone());
+                        let value = Value::Number(num.clone());
                         Ok(Box::new(ValueProjection { value, name }))
                     }
                     AstValue::Boolean(b) => {

@@ -5,18 +5,16 @@ use std::{
     str::FromStr,
 };
 
-use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
+use bigdecimal::BigDecimal;
 use chrono::{NaiveDate, NaiveDateTime};
 use thiserror::Error;
 
 use crate::util::SmartReference;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Value {
     Str(String),
-    Float(f64),
-    Int(i64),
-    BigDecimal(BigDecimal),
+    Number(BigDecimal),
     Date(NaiveDate),
     Timestamp(NaiveDateTime),
     Bool(bool),
@@ -26,9 +24,7 @@ pub enum Value {
 impl Display for Value {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Int(i) => i.fmt(formatter),
-            Value::Float(f) => f.fmt(formatter),
-            Value::BigDecimal(b) => b.fmt(formatter),
+            Value::Number(b) => b.fmt(formatter),
             Value::Date(d) => d.format("%Y-%m-%d").fmt(formatter),
             Value::Timestamp(d) => d.format("%Y-%m-%d %H:%M:%S%.f").fmt(formatter),
             Value::Str(str) => str.fmt(formatter),
@@ -45,31 +41,14 @@ impl Display for Value {
 }
 impl From<BigDecimal> for Value {
     fn from(decimal: BigDecimal) -> Self {
-        let str = decimal.to_string();
-        if let Ok(i) = i64::from_str(&str) {
-            if let Some(other_decimal) = BigDecimal::from_i64(i) {
-                if decimal == other_decimal {
-                    return Value::Int(i);
-                }
-            }
-        }
-        if let Ok(f) = f64::from_str(&str) {
-            if let Some(other_decimal) = BigDecimal::from_f64(f) {
-                if decimal == other_decimal {
-                    return Value::Float(f);
-                }
-            }
-        }
-        Value::BigDecimal(decimal)
+        Value::Number(decimal)
     }
 }
 
 impl Value {
     fn as_number(&self) -> Option<SmartReference<'_, BigDecimal>> {
         match self {
-            Value::BigDecimal(bc) => Some(bc.into()),
-            Value::Float(f) => BigDecimal::from_f64(*f).map(|f| f.into()),
-            Value::Int(i) => BigDecimal::from_i64(*i).map(|f| f.into()),
+            Value::Number(bc) => Some(bc.into()),
             _ => None,
         }
     }
@@ -95,88 +74,6 @@ impl From<&str> for Value {
             return decimal.into();
         }
         Value::Str(value.to_string())
-    }
-}
-
-impl PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        match self {
-            Value::Str(me) => match other {
-                Value::Str(other) => me == other,
-                _ => false,
-            },
-            Value::Int(me) => match other {
-                Value::Int(other) => me == other,
-                Value::BigDecimal(bc) => {
-                    BigDecimal::from_i64(*me).map(|b| b == *bc).unwrap_or(false)
-                }
-                Value::Float(f) => me.to_f64().map(|b| b == *f).unwrap_or(false),
-                _ => false,
-            },
-            Value::BigDecimal(me) => match other {
-                Value::BigDecimal(other) => me == other,
-                Value::Int(i) => BigDecimal::from_i64(*i).map(|i| i == *me).unwrap_or(false),
-                Value::Float(f) => BigDecimal::from_f64(*f).map(|f| f == *me).unwrap_or(false),
-                _ => false,
-            },
-            Value::Float(me) => match other {
-                Value::Float(other) => me == other,
-                Value::BigDecimal(bc) => {
-                    BigDecimal::from_f64(*me).map(|b| b == *bc).unwrap_or(false)
-                }
-                Value::Int(i) => i.to_f64().map(|i| i == *me).unwrap_or(false),
-                _ => false,
-            },
-            Value::Bool(me) => match other {
-                Value::Bool(other) => me == other,
-                _ => false,
-            },
-            Value::Timestamp(me) => match other {
-                Value::Timestamp(other) => me == other,
-                _ => false,
-            },
-            Value::Date(me) => match other {
-                Value::Date(other) => me == other,
-                _ => false,
-            },
-            Value::Empty => matches!(other, Value::Empty),
-        }
-    }
-}
-
-impl Eq for Value {}
-
-impl Hash for Value {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        match self {
-            Value::Empty => state.write_i8(1),
-            Value::Bool(true) => state.write_i8(2),
-            Value::Bool(false) => state.write_i8(3),
-            Value::Int(i) => {
-                state.write_i8(4);
-                i.hash(state);
-            }
-            Value::Str(str) => {
-                state.write_i8(5);
-                str.hash(state);
-            }
-            Value::BigDecimal(b) => {
-                state.write_i8(6);
-                b.hash(state);
-            }
-            Value::Date(b) => {
-                state.write_i8(7);
-                b.hash(state);
-            }
-            Value::Timestamp(b) => {
-                state.write_i8(8);
-                b.hash(state);
-            }
-            Value::Float(f) => {
-                state.write_i8(8);
-                state.write_u64(f.to_bits())
-            }
-        }
     }
 }
 
@@ -215,10 +112,11 @@ pub enum ValueError {
 mod tests {
 
     use super::*;
+    use bigdecimal::FromPrimitive;
 
     #[test]
     fn display_int_value() {
-        let value = Value::Int(101);
+        let value = Value::Number(BigDecimal::from_i16(101).unwrap());
 
         let str = format!("{}", value);
 
@@ -227,11 +125,11 @@ mod tests {
 
     #[test]
     fn display_float_value() {
-        let value = Value::Float(10.1);
+        let value = Value::Number(BigDecimal::from_f32(10.25).unwrap());
 
         let str = format!("{}", value);
 
-        assert_eq!(str, "10.1");
+        assert_eq!(str, "10.25");
     }
 
     #[test]
@@ -255,7 +153,7 @@ mod tests {
     #[test]
     fn display_big_decimal_value() {
         let value =
-            Value::BigDecimal(BigDecimal::from_str("12312312312312312312312312313123").unwrap());
+            Value::Number(BigDecimal::from_str("12312312312312312312312312313123").unwrap());
 
         let str = format!("{}", value);
 
@@ -356,18 +254,6 @@ mod tests {
     }
 
     #[test]
-    fn from_int() {
-        let str = "-2001";
-        let value: Value = str.into();
-
-        let str = match value {
-            Value::Int(str) => Some(str),
-            _ => None,
-        };
-        assert_eq!(str, Some(-2001));
-    }
-
-    #[test]
     fn from_true() {
         let str = "TRUE";
         let value: Value = str.into();
@@ -392,24 +278,12 @@ mod tests {
     }
 
     #[test]
-    fn from_float() {
-        let str = "3.25";
-        let value: Value = str.into();
-
-        let str = match value {
-            Value::Float(str) => Some(str),
-            _ => None,
-        };
-        assert_eq!(str, Some(3.25));
-    }
-
-    #[test]
-    fn from_big_decimal() {
+    fn from_number() {
         let str = "325123142355765678123412453653.123412453456256456";
         let value: Value = str.into();
 
         let str = match value {
-            Value::BigDecimal(str) => Some(str),
+            Value::Number(str) => Some(str),
             _ => None,
         };
         assert_eq!(

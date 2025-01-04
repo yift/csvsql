@@ -3,7 +3,7 @@ use std::{
     ops::Deref,
 };
 
-use bigdecimal::ToPrimitive;
+use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive, Zero};
 use chrono::NaiveDateTime;
 use csvsql::{
     args::Args,
@@ -25,7 +25,10 @@ struct Customer {
 impl Customer {
     fn to_values(&self) -> Vec<(String, Value)> {
         vec![
-            ("id".into(), Value::Int(self.id)),
+            (
+                "id".into(),
+                Value::Number(BigDecimal::from_i64(self.id).unwrap()),
+            ),
             ("company".into(), Value::Str(self.company.to_string())),
             ("name".into(), Value::Str(self.name.to_string())),
             ("country".into(), Value::Str(self.country.to_string())),
@@ -827,7 +830,7 @@ fn test_cartesian_product() -> Result<(), CdvSqlError> {
     for name in get_customers() {
         let name = name.name;
         for id in get_customers() {
-            let id = id.id;
+            let id = BigDecimal::from_i64(id.id).unwrap();
             expected_results.insert((name.clone(), id));
         }
     }
@@ -836,9 +839,9 @@ fn test_cartesian_product() -> Result<(), CdvSqlError> {
 
     for row in results.rows() {
         let name = results.value(&row, &ColumnName::simple("name")).to_string();
-        let id = match *results.value(&row, &ColumnName::simple("id")) {
-            Value::Int(i) => i,
-            _ => -1,
+        let id = match results.value(&row, &ColumnName::simple("id")).deref() {
+            Value::Number(i) => i.clone(),
+            _ => BigDecimal::zero(),
         };
         assert!(expected_results.remove(&(name, id)));
     }
@@ -885,8 +888,7 @@ fn test_select_with_plus() -> Result<(), CdvSqlError> {
             .value(&row, &ColumnName::simple("total_price"))
             .deref()
         {
-            Value::BigDecimal(b) => b.to_f64().unwrap(),
-            Value::Float(f) => *f,
+            Value::Number(b) => b.to_f64().unwrap(),
             _ => 0.1,
         };
         let actual_price = prices.remove(&id).unwrap();
@@ -940,16 +942,14 @@ fn test_use_literal() -> Result<(), CdvSqlError> {
             .value(&row, &ColumnName::simple("tax percentage"))
             .deref()
         {
-            Value::BigDecimal(b) => b.to_f64().unwrap(),
-            Value::Float(f) => *f,
+            Value::Number(b) => b.to_f64().unwrap(),
             _ => 0.1,
         };
         let tax_times_100 = match results
             .value(&row, &ColumnName::simple("100 * tax percentage"))
             .deref()
         {
-            Value::BigDecimal(b) => b.to_f64().unwrap(),
-            Value::Float(f) => *f,
+            Value::Number(b) => b.to_f64().unwrap(),
             _ => 0.1,
         };
 

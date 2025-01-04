@@ -50,6 +50,9 @@ pub enum WriterError {
 
 #[cfg(test)]
 mod tests {
+    use bigdecimal::BigDecimal;
+    use bigdecimal::FromPrimitive;
+
     use super::*;
     use crate::results::Column;
     use crate::results::ColumnName;
@@ -93,7 +96,7 @@ mod tests {
         for col in 0..5 {
             let mut data = Vec::new();
             for row in 0..3 {
-                data.push(Value::Int(col * 12 + row));
+                data.push(Value::Number(BigDecimal::from_i32(col * 12 + row).unwrap()));
             }
             values.push(data);
         }
