@@ -1222,6 +1222,7 @@ fn test_is_null_operatorrs() -> Result<(), CdvSqlError> {
 
     Ok(())
 }
+
 #[test]
 fn test_is_true_false() -> Result<(), CdvSqlError> {
     let args = Args {
@@ -1274,6 +1275,45 @@ fn test_is_true_false() -> Result<(), CdvSqlError> {
         assert_eq!(is_not_true.deref(), &Value::Bool(!customer.active));
         assert_eq!(is_false.deref(), &Value::Bool(!customer.active));
         assert_eq!(is_not_false.deref(), &Value::Bool(customer.active));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_in_list() -> Result<(), CdvSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let sql = r#"
+            SELECT
+                "customer id" in (5667204520293600582, 8181115030395395092) as in_list,
+                "customer id" NOT in (5667204520293600582, 8181115030395395092) as not_in_list,
+            FROM tests.data.sales
+    "#;
+    let results = engine.execute_commands(sql)?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.first().unwrap();
+
+    assert_eq!(results.number_of_columns(), 2);
+
+    let sales = get_sales();
+
+    assert_eq!(results.number_of_rows(), sales.len());
+
+    for (index, sale) in sales.iter().enumerate() {
+        let expected =
+            sale.customer_id == 5667204520293600582 || sale.customer_id == 8181115030395395092;
+        let in_list = results.value(&Row::from_index(index), &ColumnName::simple("in_list"));
+        let not_in_list =
+            results.value(&Row::from_index(index), &ColumnName::simple("not_in_list"));
+        assert_eq!(in_list.deref(), &Value::Bool(expected));
+        assert_eq!(not_in_list.deref(), &Value::Bool(!expected));
     }
 
     Ok(())

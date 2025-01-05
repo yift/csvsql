@@ -3,14 +3,17 @@ use sqlparser::ast::{BinaryOperator, Expr, SelectItem, WildcardAdditionalOptions
 use crate::error::CdvSqlError;
 use crate::results::ResultName;
 use crate::util::SmartReference;
+use crate::value;
 use crate::{
     results::{Column, ColumnName, ResultSet, Row},
     value::Value,
 };
+use itertools::Itertools;
 use sqlparser::ast::Value as AstValue;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
+
 trait Projection {
     fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value>;
     fn name(&self) -> SmartReference<'_, ColumnName>;
@@ -614,6 +617,30 @@ impl UnaryFunction for IsNotNull {
     }
 }
 
+struct InProjection {
+    value: Box<dyn Projection>,
+    list: Vec<Box<dyn Projection>>,
+    negated: bool,
+}
+impl Projection for InProjection {
+    fn name(&self) -> SmartReference<ColumnName> {
+        let list = self.list.iter().map(|t| format!("{}", t.name())).join(", ");
+        let neg = if self.negated { "NOT " } else { "" };
+        let name = format!("{}{} IN ({})", neg, self.value.name(), list);
+        ColumnName::simple(&name).into()
+    }
+    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
+        let value = self.value.get(results, row);
+        for item in &self.list {
+            let item = item.get(results, row);
+            if item == value {
+                return Value::Bool(!self.negated).into();
+            }
+        }
+        Value::Bool(self.negated).into()
+    }
+}
+
 impl SingleConvert for Expr {
     fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError> {
         match self {
@@ -711,6 +738,23 @@ impl SingleConvert for Expr {
                 let value = val.convert_single(parent)?;
                 let operator = Box::new(IsNotNull {});
                 Ok(Box::new(UnartyProjection { value, operator }))
+            }
+            Expr::InList {
+                expr,
+                list,
+                negated,
+            } => {
+                let value = expr.convert_single(parent)?;
+                let mut items = Vec::new();
+                for item in list {
+                    items.push(item.convert_single(parent)?);
+                }
+
+                Ok(Box::new(InProjection {
+                    value,
+                    list: items,
+                    negated: negated.clone(),
+                }))
             }
             _ => Err(CdvSqlError::ToDo(format!(
                 "Select expression like {}",
