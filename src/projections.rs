@@ -352,6 +352,7 @@ impl BinaryFunction for GreaterThenEq {
         true
     }
 }
+
 struct NotEquals {}
 impl BinaryFunction for NotEquals {
     fn calculate<'a>(
@@ -365,6 +366,73 @@ impl BinaryFunction for NotEquals {
     }
     fn name(&self) -> &str {
         "<>"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+
+struct AndBinaryFunction {}
+impl BinaryFunction for AndBinaryFunction {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let results = match (left.deref(), right.deref()) {
+            (&Value::Bool(true), &Value::Bool(true)) => Value::Bool(true),
+            (&Value::Bool(_), &Value::Bool(_)) => Value::Bool(false),
+            _ => Value::Empty,
+        };
+        results.into()
+    }
+    fn name(&self) -> &str {
+        "AND"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+
+struct OrBinaryFunction {}
+impl BinaryFunction for OrBinaryFunction {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let results = match (left.deref(), right.deref()) {
+            (&Value::Bool(false), &Value::Bool(false)) => Value::Bool(false),
+            (&Value::Bool(_), &Value::Bool(_)) => Value::Bool(true),
+            _ => Value::Empty,
+        };
+        results.into()
+    }
+    fn name(&self) -> &str {
+        "OR"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+
+struct XorBinaryFunction {}
+impl BinaryFunction for XorBinaryFunction {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let results = match (left.deref(), right.deref()) {
+            (&Value::Bool(false), &Value::Bool(true)) => Value::Bool(true),
+            (&Value::Bool(true), &Value::Bool(false)) => Value::Bool(true),
+            (&Value::Bool(_), &Value::Bool(_)) => Value::Bool(false),
+            _ => Value::Empty,
+        };
+        results.into()
+    }
+    fn name(&self) -> &str {
+        "XOR"
     }
     fn is_operator(&self) -> bool {
         true
@@ -470,8 +538,11 @@ impl SingleConvert for Expr {
                     BinaryOperator::NotEq => Box::new(NotEquals {}),
                     BinaryOperator::GtEq => Box::new(GreaterThenEq {}),
                     BinaryOperator::LtEq => Box::new(LessThenEq {}),
+                    BinaryOperator::And => Box::new(AndBinaryFunction {}),
+                    BinaryOperator::Or => Box::new(OrBinaryFunction {}),
+                    BinaryOperator::Xor => Box::new(XorBinaryFunction {}),
                     _ => {
-                        return Err(CdvSqlError::ToDo(format!("Operator: {}", op)));
+                        return Err(CdvSqlError::Unsupported(format!("Operator: {}", op)));
                     }
                 };
                 Ok(Box::new(BinaryProjection {

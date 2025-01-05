@@ -1130,3 +1130,47 @@ fn test_comparisons() -> Result<(), CdvSqlError> {
 
     Ok(())
 }
+
+#[test]
+fn test_bololean_arithmetic() -> Result<(), CdvSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let results = engine.execute_commands(
+        "SELECT b1, b2, b1 AND b2, b1 OR b2, b1 XOR b2 FROM (SELECT price > 180 as b1, \"delivery cost\" > 1 as b2 FROM tests.data.sales)",
+    )?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.first().unwrap();
+
+    assert_eq!(results.number_of_columns(), 5);
+
+    let sales = get_sales();
+
+    assert_eq!(results.number_of_rows(), sales.len());
+
+    for (index, sale) in sales.iter().enumerate() {
+        let b1 = sale.price > 180.0;
+        let b2 = sale.delivery_cost > 1.0;
+        let row = Row::from_index(index);
+        let mut data = HashMap::new();
+        for col in results.columns() {
+            let name = results.column_name(&col).unwrap();
+            if let Value::Bool(b) = results.get(&row, &col).deref() {
+                data.insert(name.name().to_string(), b.clone());
+            }
+        }
+
+        assert_eq!(data.get("b1"), Some(&b1));
+        assert_eq!(data.get("b2"), Some(&b2));
+        assert_eq!(data.get("b1 AND b2"), Some(&(b1 && b2)));
+        assert_eq!(data.get("b1 OR b2"), Some(&(b1 || b2)));
+        assert_eq!(data.get("b1 XOR b2"), Some(&(b1 != b2)));
+    }
+
+    Ok(())
+}
