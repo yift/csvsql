@@ -501,6 +501,119 @@ impl Projection for ValueProjection {
         name.into()
     }
 }
+
+trait UnaryFunction {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value>;
+    fn name(&self) -> &str;
+    fn function_type(&self) -> UnaryFunctionType;
+}
+
+enum UnaryFunctionType {
+    Prefix,
+    Postfix,
+    Function,
+}
+struct UnartyProjection {
+    value: Box<dyn Projection>,
+    operator: Box<dyn UnaryFunction>,
+}
+
+impl Projection for UnartyProjection {
+    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
+        let value = self.value.get(results, row);
+        self.operator.calculate(value)
+    }
+    fn name(&self) -> SmartReference<'_, ColumnName> {
+        let name = match self.operator.function_type() {
+            UnaryFunctionType::Prefix => format!("{} {}", self.operator.name(), self.value.name(),),
+            UnaryFunctionType::Postfix => {
+                format!("{} {}", self.value.name(), self.operator.name(),)
+            }
+            UnaryFunctionType::Function => {
+                format!("{}({})", self.operator.name(), self.value.name(),)
+            }
+        };
+        ColumnName::simple(&name).into()
+    }
+}
+
+struct IsFalse {}
+impl UnaryFunction for IsFalse {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        Value::Bool(value.deref() == &Value::Bool(false)).into()
+    }
+    fn name(&self) -> &str {
+        "IS FALSE"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Postfix
+    }
+}
+
+struct IsNotFalse {}
+impl UnaryFunction for IsNotFalse {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        Value::Bool(value.deref() != &Value::Bool(false)).into()
+    }
+    fn name(&self) -> &str {
+        "IS NOT FALSE"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Postfix
+    }
+}
+struct IsTrue {}
+impl UnaryFunction for IsTrue {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        Value::Bool(value.deref() == &Value::Bool(true)).into()
+    }
+    fn name(&self) -> &str {
+        "IS TRUE"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Postfix
+    }
+}
+
+struct IsNotTrue {}
+impl UnaryFunction for IsNotTrue {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        Value::Bool(value.deref() != &Value::Bool(true)).into()
+    }
+    fn name(&self) -> &str {
+        "IS NOT TRUE"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Postfix
+    }
+}
+
+struct IsNull {}
+impl UnaryFunction for IsNull {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        Value::Bool(value.deref() == &Value::Empty).into()
+    }
+    fn name(&self) -> &str {
+        "IS NULL"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Postfix
+    }
+}
+
+struct IsNotNull {}
+impl UnaryFunction for IsNotNull {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        Value::Bool(value.deref() != &Value::Empty).into()
+    }
+    fn name(&self) -> &str {
+        "IS NOT NULL"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Postfix
+    }
+}
+
 impl SingleConvert for Expr {
     fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError> {
         match self {
@@ -568,6 +681,36 @@ impl SingleConvert for Expr {
                     }
                     _ => Err(CdvSqlError::ToDo(format!("Select literal value {}", self))),
                 }
+            }
+            Expr::IsFalse(val) => {
+                let value = val.convert_single(parent)?;
+                let operator = Box::new(IsFalse {});
+                Ok(Box::new(UnartyProjection { value, operator }))
+            }
+            Expr::IsNotFalse(val) => {
+                let value = val.convert_single(parent)?;
+                let operator = Box::new(IsNotFalse {});
+                Ok(Box::new(UnartyProjection { value, operator }))
+            }
+            Expr::IsTrue(val) => {
+                let value = val.convert_single(parent)?;
+                let operator = Box::new(IsTrue {});
+                Ok(Box::new(UnartyProjection { value, operator }))
+            }
+            Expr::IsNotTrue(val) => {
+                let value = val.convert_single(parent)?;
+                let operator = Box::new(IsNotTrue {});
+                Ok(Box::new(UnartyProjection { value, operator }))
+            }
+            Expr::IsNull(val) => {
+                let value = val.convert_single(parent)?;
+                let operator = Box::new(IsNull {});
+                Ok(Box::new(UnartyProjection { value, operator }))
+            }
+            Expr::IsNotNull(val) => {
+                let value = val.convert_single(parent)?;
+                let operator = Box::new(IsNotNull {});
+                Ok(Box::new(UnartyProjection { value, operator }))
             }
             _ => Err(CdvSqlError::ToDo(format!(
                 "Select expression like {}",

@@ -38,6 +38,12 @@ impl Extractor for Query {
                 "SELECT ... FOR UPDATE/SHARE".to_string(),
             ));
         }
+        if self.settings.is_some() {
+            return Err(CdvSqlError::Unsupported("SELECT ... SETTINGS".to_string()));
+        }
+        if self.format_clause.is_some() {
+            return Err(CdvSqlError::ToDo("SELECT ... FORMAT".to_string()));
+        }
 
         if self.order_by.is_some() {
             return Err(CdvSqlError::ToDo("SELECT ... ORDER BY".to_string()));
@@ -47,12 +53,6 @@ impl Extractor for Query {
         }
         if self.offset.is_some() {
             return Err(CdvSqlError::ToDo("SELECT ... OFFSET".to_string()));
-        }
-        if self.settings.is_some() {
-            return Err(CdvSqlError::ToDo("SELECT ... SETTINGS".to_string()));
-        }
-        if self.format_clause.is_some() {
-            return Err(CdvSqlError::ToDo("SELECT ... FORMAT".to_string()));
         }
 
         match &*self.body {
@@ -168,22 +168,6 @@ impl Extractor for Select {
         };
 
         make_projection(product, &self.projection)
-
-        /*
-        pub enum SelectItem {
-            /// Any expression, not followed by `[ AS ] alias`
-            UnnamedExpr(Expr),
-            /// An expression, followed by `[ AS ] alias`
-            ExprWithAlias { expr: Expr, alias: Ident },
-            /// `alias.*` or even `schema.table.*`
-            QualifiedWildcard(ObjectName, WildcardAdditionalOptions),
-            /// An unqualified `*`
-            Wildcard(WildcardAdditionalOptions),
-        }
-
-                /// projection expressions
-                pub projection: Vec<SelectItem>,
-                     */
     }
 }
 
@@ -269,139 +253,5 @@ impl Extractor for TableFactor {
                 "SELECT ... FROM must be a table or sub query".to_string(),
             )),
         }
-        /*match self {
-        Table {
-            #[cfg_attr(feature = "visitor", visit(with = "visit_relation"))]
-            name: ObjectName,
-            alias: Option<TableAlias>,
-            /// Arguments of a table-valued function, as supported by Postgres
-            /// and MSSQL. Note that deprecated MSSQL `FROM foo (NOLOCK)` syntax
-            /// will also be parsed as `args`.
-            ///
-            /// This field's value is `Some(v)`, where `v` is a (possibly empty)
-            /// vector of arguments, in the case of a table-valued function call,
-            /// whereas it's `None` in the case of a regular table name.
-            args: Option<TableFunctionArgs>,
-            /// MSSQL-specific `WITH (...)` hints such as NOLOCK.
-            with_hints: Vec<Expr>,
-            /// Optional version qualifier to facilitate table time-travel, as
-            /// supported by BigQuery and MSSQL.
-            version: Option<TableVersion>,
-            //  Optional table function modifier to generate the ordinality for column.
-            /// For example, `SELECT * FROM generate_series(1, 10) WITH ORDINALITY AS t(a, b);`
-            /// [WITH ORDINALITY](https://www.postgresql.org/docs/current/functions-srf.html), supported by Postgres.
-            with_ordinality: bool,
-            /// [Partition selection](https://dev.mysql.com/doc/refman/8.0/en/partitioning-selection.html), supported by MySQL.
-            partitions: Vec<Ident>,
-            /// Optional PartiQL JsonPath: <https://partiql.org/dql/from.html>
-            json_path: Option<JsonPath>,
-
-         }*/
     }
 }
-/*
-struct NamedResults {
-    results: Box<dyn ResultSet>,
-    alias: String,
-}
-impl ResultSet for NamedResults {
-    fn name(&self) -> &str {
-        &self.alias
-    }
-    fn metadata(&self) -> &ResultSetMetaData {
-        &self.results.metadata()
-    }
-    fn lines(&self) -> &[ResultLine] {
-        self.results.lines()
-    }
-}
-
-struct FileResults {
-    name: String,
-    metadata: ResultSetMetaData,
-    lines: Vec<ResultLine>,
-}
-impl ResultSet for FileResults {
-    fn name(&self) -> &str {
-        &self.name
-    }
-    fn metadata(&self) -> &ResultSetMetaData {
-        &self.metadata
-    }
-    fn lines(&self) -> &[ResultLine] {
-        &self.lines
-    }
-}
-
-impl FileResults {
-    fn new(path: &PathBuf, first_line_as_name: bool) -> Result<Self, IoError> {
-        let mut reader = ReaderBuilder::new()
-            .flexible(true)
-            .has_headers(first_line_as_name)
-            .from_path(path)?;
-        let mut cols = Vec::new();
-        if first_line_as_name {
-            let header = reader.headers()?;
-            for h in header {
-                cols.push(h.to_string());
-            }
-        }
-        let mut lines = Vec::new();
-        for records in reader.records() {
-            let mut line = Vec::new();
-            let records = records?;
-            for (index, record) in records.iter().enumerate() {
-                let value = Value::from(record);
-                line.push(value);
-                if index >= cols.len() {
-                    cols.push(Self::get_default_header(index));
-                }
-            }
-            lines.push(ResultLine::new(line));
-        }
-
-        let name = path
-            .file_stem()
-            .and_then(|f| f.to_str())
-            .unwrap_or_default()
-            .to_string();
-        let metadata = ResultSetMetaData::new(cols);
-
-        Ok(FileResults {
-            name,
-            metadata,
-            lines,
-        })
-    }
-
-    fn get_default_header(index: usize) -> String {
-        let mut index = index;
-        let mut title = String::new();
-        let first = 'A' as usize;
-        let size = 'Z' as usize - first + 1;
-        loop {
-            let chr = index % (size);
-            index -= chr;
-            title.insert(0, char::from((chr + first) as u8));
-            if index == 0 {
-                break;
-            }
-            index = index / size - 1;
-        }
-        title
-    }
-}
-
-struct ProductResults {
-    name: String,
-    data: Vec<Box<dyn ResultSet>>,
-}
-
-impl ResultSet for ProductResults {
-    fn name(&self) -> &str {
-        &self.name
-    }
-    fn metadata(&self) -> &ResultSetMetaData {}
-    fn lines(&self) -> &[ResultLine] {}
-}
-*/

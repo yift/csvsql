@@ -1132,7 +1132,7 @@ fn test_comparisons() -> Result<(), CdvSqlError> {
 }
 
 #[test]
-fn test_bololean_arithmetic() -> Result<(), CdvSqlError> {
+fn test_boolean_arithmetic() -> Result<(), CdvSqlError> {
     let args = Args {
         command: None,
         home: None,
@@ -1170,6 +1170,110 @@ fn test_bololean_arithmetic() -> Result<(), CdvSqlError> {
         assert_eq!(data.get("b1 AND b2"), Some(&(b1 && b2)));
         assert_eq!(data.get("b1 OR b2"), Some(&(b1 || b2)));
         assert_eq!(data.get("b1 XOR b2"), Some(&(b1 != b2)));
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_is_null_operatorrs() -> Result<(), CdvSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let sql = r#"
+            SELECT
+                "delivered at" IS NULL,
+                "delivered at" IS NOT NULL,
+            FROM tests.data.sales
+    "#;
+    let results = engine.execute_commands(sql)?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.first().unwrap();
+
+    assert_eq!(results.number_of_columns(), 2);
+
+    let sales = get_sales();
+
+    assert_eq!(results.number_of_rows(), sales.len());
+
+    for (index, sale) in sales.iter().enumerate() {
+        let is_null = results.value(
+            &Row::from_index(index),
+            &ColumnName::simple("delivered at IS NULL"),
+        );
+        let is_not_null = results.value(
+            &Row::from_index(index),
+            &ColumnName::simple("delivered at IS NOT NULL"),
+        );
+
+        if sale.delivered_at.is_none() {
+            assert_eq!(is_null.deref(), &Value::Bool(true));
+            assert_eq!(is_not_null.deref(), &Value::Bool(false));
+        } else {
+            assert_eq!(is_null.deref(), &Value::Bool(false));
+            assert_eq!(is_not_null.deref(), &Value::Bool(true));
+        }
+    }
+
+    Ok(())
+}
+#[test]
+fn test_is_true_false() -> Result<(), CdvSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let sql = r#"
+            SELECT
+                active,
+                active IS TRUE,
+                active IS FALSE,
+                active IS NOT TRUE,
+                active IS NOT FALSE,
+            FROM tests.data.customers
+    "#;
+    let results = engine.execute_commands(sql)?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.first().unwrap();
+
+    assert_eq!(results.number_of_columns(), 5);
+
+    let customers = get_customers();
+
+    assert_eq!(results.number_of_rows(), customers.len());
+
+    for (index, customer) in customers.iter().enumerate() {
+        let active = results.value(&Row::from_index(index), &ColumnName::simple("active"));
+        let is_true = results.value(
+            &Row::from_index(index),
+            &ColumnName::simple("active IS TRUE"),
+        );
+        let is_not_true = results.value(
+            &Row::from_index(index),
+            &ColumnName::simple("active IS NOT TRUE"),
+        );
+        let is_false = results.value(
+            &Row::from_index(index),
+            &ColumnName::simple("active IS FALSE"),
+        );
+        let is_not_false = results.value(
+            &Row::from_index(index),
+            &ColumnName::simple("active IS NOT FALSE"),
+        );
+        assert_eq!(active.deref(), &Value::Bool(customer.active));
+        assert_eq!(is_true.deref(), &Value::Bool(customer.active));
+        assert_eq!(is_not_true.deref(), &Value::Bool(!customer.active));
+        assert_eq!(is_false.deref(), &Value::Bool(!customer.active));
+        assert_eq!(is_not_false.deref(), &Value::Bool(customer.active));
     }
 
     Ok(())
