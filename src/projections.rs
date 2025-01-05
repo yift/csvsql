@@ -239,6 +239,138 @@ impl BinaryFunction for Modulu {
     }
 }
 
+struct ConcatOperator {}
+impl BinaryFunction for ConcatOperator {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let mut str = left.to_string();
+        str.push_str(right.to_string().as_str());
+        let value = Value::from(str.as_str());
+        value.into()
+    }
+    fn name(&self) -> &str {
+        "||"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+
+struct LessThen {}
+impl BinaryFunction for LessThen {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let comp = left.deref() < right.deref();
+        let val: Value = comp.into();
+        val.into()
+    }
+    fn name(&self) -> &str {
+        "<"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+
+struct GreaterThen {}
+impl BinaryFunction for GreaterThen {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let comp = left.deref() > right.deref();
+        let val: Value = comp.into();
+        val.into()
+    }
+    fn name(&self) -> &str {
+        ">"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+struct Equals {}
+impl BinaryFunction for Equals {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let comp = left.deref() == right.deref();
+        let val: Value = comp.into();
+        val.into()
+    }
+    fn name(&self) -> &str {
+        "="
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+
+struct LessThenEq {}
+impl BinaryFunction for LessThenEq {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let comp = left.deref() <= right.deref();
+        let val: Value = comp.into();
+        val.into()
+    }
+    fn name(&self) -> &str {
+        "<="
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+
+struct GreaterThenEq {}
+impl BinaryFunction for GreaterThenEq {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let comp = left.deref() >= right.deref();
+        let val: Value = comp.into();
+        val.into()
+    }
+    fn name(&self) -> &str {
+        ">="
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+struct NotEquals {}
+impl BinaryFunction for NotEquals {
+    fn calculate<'a>(
+        &'a self,
+        left: SmartReference<Value>,
+        right: SmartReference<Value>,
+    ) -> SmartReference<'a, Value> {
+        let comp = left.deref() != right.deref();
+        let val: Value = comp.into();
+        val.into()
+    }
+    fn name(&self) -> &str {
+        "<>"
+    }
+    fn is_operator(&self) -> bool {
+        true
+    }
+}
+
 struct AliasProjection {
     data: Box<dyn Projection>,
     alias: ColumnName,
@@ -331,6 +463,13 @@ impl SingleConvert for Expr {
                     BinaryOperator::Divide => Box::new(Divide {}),
                     BinaryOperator::Minus => Box::new(TakeAway {}),
                     BinaryOperator::Modulo => Box::new(Modulu {}),
+                    BinaryOperator::StringConcat => Box::new(ConcatOperator {}),
+                    BinaryOperator::Lt => Box::new(LessThen {}),
+                    BinaryOperator::Gt => Box::new(GreaterThen {}),
+                    BinaryOperator::Eq => Box::new(Equals {}),
+                    BinaryOperator::NotEq => Box::new(NotEquals {}),
+                    BinaryOperator::GtEq => Box::new(GreaterThenEq {}),
+                    BinaryOperator::LtEq => Box::new(LessThenEq {}),
                     _ => {
                         return Err(CdvSqlError::ToDo(format!("Operator: {}", op)));
                     }

@@ -5,21 +5,20 @@ use std::{
     str::FromStr,
 };
 
+use crate::util::SmartReference;
 use bigdecimal::BigDecimal;
 use bigdecimal::Zero;
 use chrono::{NaiveDate, NaiveDateTime};
 use thiserror::Error;
 
-use crate::util::SmartReference;
-
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Value {
-    Str(String),
+    Empty,
+    Bool(bool),
     Number(BigDecimal),
     Date(NaiveDate),
     Timestamp(NaiveDateTime),
-    Bool(bool),
-    Empty,
+    Str(String),
 }
 
 impl Display for Value {
@@ -75,6 +74,11 @@ impl From<&str> for Value {
             return decimal.into();
         }
         Value::Str(value.to_string())
+    }
+}
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Value::Bool(value)
     }
 }
 

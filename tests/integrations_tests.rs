@@ -5,7 +5,7 @@ use std::{
 };
 
 use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive, Zero};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime};
 use csvsql::{
     args::Args,
     engine::Engine,
@@ -1005,6 +1005,127 @@ fn test_basic_arithmetic() -> Result<(), CdvSqlError> {
         assert_eq!(*data.get("ten").unwrap_or(&-200.0), 10.0);
         assert_eq!(*data.get("nothing").unwrap_or(&-200.0), -100.0);
         assert_eq!(*data.get("more_nothing").unwrap_or(&-200.0), -100.0);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_concat() -> Result<(), CdvSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let results = engine.execute_commands(
+        "SELECT name || ' <' || email ||'>' AS email FROM tests.data.customers",
+    )?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.first().unwrap();
+
+    assert_eq!(results.number_of_columns(), 1);
+
+    let customers = get_customers();
+    assert_eq!(results.number_of_rows(), customers.len());
+
+    for (index, customer) in customers.iter().enumerate() {
+        let email = results.get(&Row::from_index(index), &Column::from_index(0));
+        let expected_email = format!("{} <{}>", customer.name, customer.email);
+        assert_eq!(expected_email, email.to_string());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_comparisons() -> Result<(), CdvSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let sales = get_sales();
+    let Some((reference_index, reference)) = sales
+        .iter()
+        .enumerate()
+        .filter(|s| s.1.delivered_at.is_some())
+        .next()
+    else {
+        panic!("No delivery date?");
+    };
+    let reference = reference.delivered_at.unwrap();
+    let reference_text = reference.format("%Y-%m-%d %H:%M:%S%.f").to_string();
+    let sql = format!(
+        r#"
+            SELECT
+                "delivered at" as value,
+                "delivered at" <  '{reference_text}' as lt,
+                "delivered at" >  '{reference_text}' as gt,
+                "delivered at" =  '{reference_text}' as eq,
+                "delivered at" <=  '{reference_text}' as lteq,
+                "delivered at" >= '{reference_text}' as gteq,
+                "delivered at" <>  '{reference_text}' as neq
+            FROM tests.data.sales
+    "#
+    );
+    let results = engine.execute_commands(&sql)?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.first().unwrap();
+
+    assert_eq!(results.number_of_rows(), sales.len());
+
+    let lt = results.value(&Row::from_index(reference_index), &ColumnName::simple("lt"));
+    assert_eq!(&Value::Bool(false), lt.deref());
+    let gt = results.value(&Row::from_index(reference_index), &ColumnName::simple("gt"));
+    assert_eq!(&Value::Bool(false), gt.deref());
+    let eq = results.value(&Row::from_index(reference_index), &ColumnName::simple("eq"));
+    assert_eq!(&Value::Bool(true), eq.deref());
+    let lteq = results.value(
+        &Row::from_index(reference_index),
+        &ColumnName::simple("lteq"),
+    );
+    assert_eq!(&Value::Bool(true), lteq.deref());
+    let gteq = results.value(
+        &Row::from_index(reference_index),
+        &ColumnName::simple("gteq"),
+    );
+    assert_eq!(&Value::Bool(true), gteq.deref());
+    let neq = results.value(
+        &Row::from_index(reference_index),
+        &ColumnName::simple("neq"),
+    );
+    assert_eq!(&Value::Bool(false), neq.deref());
+
+    for (index, sale) in sales.iter().enumerate() {
+        let value = results.value(&Row::from_index(index), &ColumnName::simple("value"));
+        let expected_value = match sale.delivered_at {
+            None => Value::Empty,
+            Some(dt) => Value::Timestamp(dt),
+        };
+        assert_eq!(value, expected_value.into());
+
+        let timestamp = sale
+            .delivered_at
+            .unwrap_or(DateTime::from_timestamp_nanos(0).naive_utc());
+
+        let lt = results.value(&Row::from_index(index), &ColumnName::simple("lt"));
+        assert_eq!(&Value::Bool(timestamp < reference), lt.deref());
+        let gt = results.value(&Row::from_index(index), &ColumnName::simple("gt"));
+        assert_eq!(&Value::Bool(timestamp > reference), gt.deref());
+        let eq = results.value(&Row::from_index(index), &ColumnName::simple("eq"));
+        assert_eq!(&Value::Bool(timestamp == reference), eq.deref());
+        let lteq = results.value(&Row::from_index(index), &ColumnName::simple("lteq"));
+        assert_eq!(&Value::Bool(timestamp <= reference), lteq.deref());
+        let gteq = results.value(&Row::from_index(index), &ColumnName::simple("gteq"));
+        assert_eq!(&Value::Bool(timestamp >= reference), gteq.deref());
+        let neq = results.value(&Row::from_index(index), &ColumnName::simple("neq"));
+        assert_eq!(&Value::Bool(timestamp != reference), neq.deref());
     }
 
     Ok(())
