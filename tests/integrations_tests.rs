@@ -1,7 +1,8 @@
 use core::panic;
 use std::{
     collections::{HashMap, HashSet},
-    ops::Deref,
+    fs,
+    ops::{Deref, DerefMut},
 };
 
 use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive, Zero};
@@ -10,8 +11,10 @@ use csvsql::{
     args::Args,
     engine::Engine,
     error::CdvSqlError,
-    results::{Column, ColumnName, Row},
+    results::{Column, ColumnName},
     value::Value,
+    writer::new_csv_writer,
+    writer::Writer,
 };
 
 struct Customer {
@@ -698,12 +701,11 @@ fn test_select_all() -> Result<(), CdvSqlError> {
     };
     let engine = Engine::try_from(&args)?;
 
-    let results = engine.execute_commands("SELECT * FROM tests.data.customers")?;
+    let mut results = engine.execute_commands("SELECT * FROM tests.data.customers")?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.iter_mut().next().unwrap().deref_mut();
     assert_eq!(results.number_of_columns(), 7);
-    assert_eq!(results.number_of_rows(), 10);
 
     assert_eq!(
         results.column_name(&Column::from_index(0)).unwrap().name(),
@@ -735,14 +737,15 @@ fn test_select_all() -> Result<(), CdvSqlError> {
     );
 
     let expected_data = get_customers();
-    for (row_index, data) in expected_data.iter().enumerate() {
+    for data in expected_data.iter() {
+        assert_eq!(results.next_if_possible(), true);
         for (name, expected_value) in data.to_values() {
-            let row = Row::from_index(row_index);
             let name = ColumnName::simple(&name);
-            let actual_value = results.value(&row, &name);
+            let actual_value = results.value(&name);
             assert_eq!(expected_value, *actual_value);
         }
     }
+    assert_eq!(results.next_if_possible(), false);
     Ok(())
 }
 
@@ -755,14 +758,13 @@ fn test_select_fields() -> Result<(), CdvSqlError> {
     };
     let engine = Engine::try_from(&args)?;
 
-    let results = engine.execute_commands(
+    let mut results = engine.execute_commands(
         "SELECT id, customers.name, active, tests.data.customers.email FROM tests.data.customers",
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.iter_mut().next().unwrap();
     assert_eq!(results.number_of_columns(), 4);
-    assert_eq!(results.number_of_rows(), 10);
 
     assert_eq!(
         results.column_name(&Column::from_index(0)).unwrap().name(),
@@ -782,11 +784,11 @@ fn test_select_fields() -> Result<(), CdvSqlError> {
     );
 
     let expected_data = get_customers();
-    for (row_index, data) in expected_data.iter().enumerate() {
+    for data in expected_data.iter() {
+        assert_eq!(results.next_if_possible(), true);
         for (name, expected_value) in data.to_values() {
-            let row = Row::from_index(row_index);
             let name = ColumnName::simple(&name);
-            let actual_value = results.value(&row, &name);
+            let actual_value = results.value(&name);
             if name.name() == "id"
                 || name.name() == "name"
                 || name.name() == "active"
@@ -798,6 +800,7 @@ fn test_select_fields() -> Result<(), CdvSqlError> {
             }
         }
     }
+    assert_eq!(results.next_if_possible(), false);
     Ok(())
 }
 
@@ -810,12 +813,12 @@ fn test_cartesian_product() -> Result<(), CdvSqlError> {
     };
     let engine = Engine::try_from(&args)?;
 
-    let results = engine.execute_commands(
+    let mut results = engine.execute_commands(
         "SELECT A.id, B.name  FROM (SELECT * FROM tests.data.customers) A, (SELECT * FROM tests.data.customers) B",
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.iter_mut().next().unwrap();
     assert_eq!(results.number_of_columns(), 2);
 
     assert_eq!(
@@ -836,11 +839,9 @@ fn test_cartesian_product() -> Result<(), CdvSqlError> {
         }
     }
 
-    assert_eq!(results.number_of_rows(), expected_results.len());
-
-    for row in results.rows() {
-        let name = results.value(&row, &ColumnName::simple("name")).to_string();
-        let id = match results.value(&row, &ColumnName::simple("id")).deref() {
+    while results.next_if_possible() {
+        let name = results.value(&ColumnName::simple("name")).to_string();
+        let id = match results.value(&ColumnName::simple("id")).deref() {
             Value::Number(i) => i.clone(),
             _ => BigDecimal::zero(),
         };
@@ -859,12 +860,12 @@ fn test_select_with_plus() -> Result<(), CdvSqlError> {
     };
     let engine = Engine::try_from(&args)?;
 
-    let results = engine.execute_commands(
+    let mut results = engine.execute_commands(
         "SELECT id, price + \"delivery cost\" as total_price  FROM tests.data.sales;",
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.iter_mut().next().unwrap();
 
     assert_eq!(results.number_of_columns(), 2);
 
@@ -881,14 +882,10 @@ fn test_select_with_plus() -> Result<(), CdvSqlError> {
     for data in get_sales() {
         prices.insert(data.id.clone(), data.price + data.delivery_cost);
     }
-    assert_eq!(results.number_of_rows(), prices.len());
 
-    for row in results.rows() {
-        let id = results.value(&row, &ColumnName::simple("id")).to_string();
-        let expected_price = match results
-            .value(&row, &ColumnName::simple("total_price"))
-            .deref()
-        {
+    while results.next_if_possible() {
+        let id = results.value(&ColumnName::simple("id")).to_string();
+        let expected_price = match results.value(&ColumnName::simple("total_price")).deref() {
             Value::Number(b) => b.to_f64().unwrap(),
             _ => 0.1,
         };
@@ -910,12 +907,12 @@ fn test_use_literal() -> Result<(), CdvSqlError> {
     };
     let engine = Engine::try_from(&args)?;
 
-    let results = engine.execute_commands(
+    let mut results = engine.execute_commands(
         "SELECT id, \"tax percentage\", 100* \"tax percentage\"  FROM tests.data.sales;",
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.iter_mut().next().unwrap();
 
     assert_eq!(results.number_of_columns(), 3);
 
@@ -936,19 +933,15 @@ fn test_use_literal() -> Result<(), CdvSqlError> {
     for data in get_sales() {
         taxes.insert(data.id.clone(), data.tax_percentage);
     }
-    assert_eq!(results.number_of_rows(), taxes.len());
 
-    for row in results.rows() {
-        let id = results.value(&row, &ColumnName::simple("id")).to_string();
-        let tax = match results
-            .value(&row, &ColumnName::simple("tax percentage"))
-            .deref()
-        {
+    while results.next_if_possible() {
+        let id = results.value(&ColumnName::simple("id")).to_string();
+        let tax = match results.value(&ColumnName::simple("tax percentage")).deref() {
             Value::Number(b) => b.to_f64().unwrap(),
             _ => 0.1,
         };
         let tax_times_100 = match results
-            .value(&row, &ColumnName::simple("100 * tax percentage"))
+            .value(&ColumnName::simple("100 * tax percentage"))
             .deref()
         {
             Value::Number(b) => b.to_f64().unwrap(),
@@ -975,22 +968,18 @@ fn test_basic_arithmetic() -> Result<(), CdvSqlError> {
     };
     let engine = Engine::try_from(&args)?;
 
-    let results = engine.execute_commands(
+    let mut results = engine.execute_commands(
         "SELECT 3.14 as pi, 4 * 2.2 as eight_dot_eight, 2-10 as minus_eight, 1.2/.3 as four, 20 % 6 as two, 0/0 as nothing, 2 + 3 * 5 - 7 as ten, 0 % 0 as more_nothing FROM tests.data.sales;",
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.iter_mut().next().unwrap();
 
-    assert_eq!(results.number_of_columns(), 8);
-
-    assert_eq!(results.number_of_rows(), get_sales().len());
-
-    for row in results.rows() {
+    while results.next_if_possible() {
         let mut data = HashMap::new();
         for col in results.columns() {
             let name = results.column_name(&col).unwrap();
-            let value = match results.get(&row, &col).deref() {
+            let value = match results.get(&col).deref() {
                 Value::Number(num) => num.to_f32().unwrap(),
                 Value::Empty => -100.0,
                 _ => panic!("Unexpected value: "),
@@ -1019,23 +1008,24 @@ fn test_concat() -> Result<(), CdvSqlError> {
     };
     let engine = Engine::try_from(&args)?;
 
-    let results = engine.execute_commands(
+    let mut results = engine.execute_commands(
         "SELECT name || ' <' || email ||'>' AS email FROM tests.data.customers",
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.first_mut().unwrap();
 
     assert_eq!(results.number_of_columns(), 1);
 
     let customers = get_customers();
-    assert_eq!(results.number_of_rows(), customers.len());
 
-    for (index, customer) in customers.iter().enumerate() {
-        let email = results.get(&Row::from_index(index), &Column::from_index(0));
+    for customer in customers.iter() {
+        assert_eq!(results.next_if_possible(), true);
+        let email = results.get(&Column::from_index(0));
         let expected_email = format!("{} <{}>", customer.name, customer.email);
         assert_eq!(expected_email, email.to_string());
     }
+    assert_eq!(results.next_if_possible(), false);
 
     Ok(())
 }
@@ -1073,37 +1063,18 @@ fn test_comparisons() -> Result<(), CdvSqlError> {
             FROM tests.data.sales
     "#
     );
-    let results = engine.execute_commands(&sql)?;
+    let mut results = engine.execute_commands(&sql)?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
-
-    assert_eq!(results.number_of_rows(), sales.len());
-
-    let lt = results.value(&Row::from_index(reference_index), &ColumnName::simple("lt"));
-    assert_eq!(&Value::Bool(false), lt.deref());
-    let gt = results.value(&Row::from_index(reference_index), &ColumnName::simple("gt"));
-    assert_eq!(&Value::Bool(false), gt.deref());
-    let eq = results.value(&Row::from_index(reference_index), &ColumnName::simple("eq"));
-    assert_eq!(&Value::Bool(true), eq.deref());
-    let lteq = results.value(
-        &Row::from_index(reference_index),
-        &ColumnName::simple("lteq"),
-    );
-    assert_eq!(&Value::Bool(true), lteq.deref());
-    let gteq = results.value(
-        &Row::from_index(reference_index),
-        &ColumnName::simple("gteq"),
-    );
-    assert_eq!(&Value::Bool(true), gteq.deref());
-    let neq = results.value(
-        &Row::from_index(reference_index),
-        &ColumnName::simple("neq"),
-    );
-    assert_eq!(&Value::Bool(false), neq.deref());
+    let results = results.first_mut().unwrap();
+    let mut passed_reference_index = false;
 
     for (index, sale) in sales.iter().enumerate() {
-        let value = results.value(&Row::from_index(index), &ColumnName::simple("value"));
+        if index == reference_index {
+            passed_reference_index = true;
+        }
+        assert_eq!(results.next_if_possible(), true);
+        let value = results.value(&ColumnName::simple("value"));
         let expected_value = match sale.delivered_at {
             None => Value::Empty,
             Some(dt) => Value::Timestamp(dt),
@@ -1114,19 +1085,21 @@ fn test_comparisons() -> Result<(), CdvSqlError> {
             .delivered_at
             .unwrap_or(DateTime::from_timestamp_nanos(0).naive_utc());
 
-        let lt = results.value(&Row::from_index(index), &ColumnName::simple("lt"));
+        let lt = results.value(&ColumnName::simple("lt"));
         assert_eq!(&Value::Bool(timestamp < reference), lt.deref());
-        let gt = results.value(&Row::from_index(index), &ColumnName::simple("gt"));
+        let gt = results.value(&ColumnName::simple("gt"));
         assert_eq!(&Value::Bool(timestamp > reference), gt.deref());
-        let eq = results.value(&Row::from_index(index), &ColumnName::simple("eq"));
+        let eq = results.value(&ColumnName::simple("eq"));
         assert_eq!(&Value::Bool(timestamp == reference), eq.deref());
-        let lteq = results.value(&Row::from_index(index), &ColumnName::simple("lteq"));
+        let lteq = results.value(&ColumnName::simple("lteq"));
         assert_eq!(&Value::Bool(timestamp <= reference), lteq.deref());
-        let gteq = results.value(&Row::from_index(index), &ColumnName::simple("gteq"));
+        let gteq = results.value(&ColumnName::simple("gteq"));
         assert_eq!(&Value::Bool(timestamp >= reference), gteq.deref());
-        let neq = results.value(&Row::from_index(index), &ColumnName::simple("neq"));
+        let neq = results.value(&ColumnName::simple("neq"));
         assert_eq!(&Value::Bool(timestamp != reference), neq.deref());
     }
+    assert_eq!(results.next_if_possible(), false);
+    assert_eq!(passed_reference_index, true);
 
     Ok(())
 }
@@ -1140,27 +1113,25 @@ fn test_boolean_arithmetic() -> Result<(), CdvSqlError> {
     };
     let engine = Engine::try_from(&args)?;
 
-    let results = engine.execute_commands(
+    let mut results = engine.execute_commands(
         "SELECT b1, b2, b1 AND b2, b1 OR b2, b1 XOR b2 FROM (SELECT price > 180 as b1, \"delivery cost\" > 1 as b2 FROM tests.data.sales)",
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.first_mut().unwrap();
 
     assert_eq!(results.number_of_columns(), 5);
 
     let sales = get_sales();
 
-    assert_eq!(results.number_of_rows(), sales.len());
-
-    for (index, sale) in sales.iter().enumerate() {
+    for sale in sales.iter() {
+        assert_eq!(results.next_if_possible(), true);
         let b1 = sale.price > 180.0;
         let b2 = sale.delivery_cost > 1.0;
-        let row = Row::from_index(index);
         let mut data = HashMap::new();
         for col in results.columns() {
             let name = results.column_name(&col).unwrap();
-            if let Value::Bool(b) = results.get(&row, &col).deref() {
+            if let Value::Bool(b) = results.get(&col).deref() {
                 data.insert(name.name().to_string(), b.clone());
             }
         }
@@ -1171,6 +1142,7 @@ fn test_boolean_arithmetic() -> Result<(), CdvSqlError> {
         assert_eq!(data.get("b1 OR b2"), Some(&(b1 || b2)));
         assert_eq!(data.get("b1 XOR b2"), Some(&(b1 != b2)));
     }
+    assert_eq!(results.next_if_possible(), false);
 
     Ok(())
 }
@@ -1190,26 +1162,19 @@ fn test_is_null_operatorrs() -> Result<(), CdvSqlError> {
                 "delivered at" IS NOT NULL,
             FROM tests.data.sales
     "#;
-    let results = engine.execute_commands(sql)?;
+    let mut results = engine.execute_commands(sql)?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.first_mut().unwrap();
 
     assert_eq!(results.number_of_columns(), 2);
 
     let sales = get_sales();
 
-    assert_eq!(results.number_of_rows(), sales.len());
-
-    for (index, sale) in sales.iter().enumerate() {
-        let is_null = results.value(
-            &Row::from_index(index),
-            &ColumnName::simple("delivered at IS NULL"),
-        );
-        let is_not_null = results.value(
-            &Row::from_index(index),
-            &ColumnName::simple("delivered at IS NOT NULL"),
-        );
+    for sale in sales.iter() {
+        assert_eq!(results.next_if_possible(), true);
+        let is_null = results.value(&ColumnName::simple("delivered at IS NULL"));
+        let is_not_null = results.value(&ColumnName::simple("delivered at IS NOT NULL"));
 
         if sale.delivered_at.is_none() {
             assert_eq!(is_null.deref(), &Value::Bool(true));
@@ -1219,6 +1184,7 @@ fn test_is_null_operatorrs() -> Result<(), CdvSqlError> {
             assert_eq!(is_not_null.deref(), &Value::Bool(true));
         }
     }
+    assert_eq!(results.next_if_possible(), false);
 
     Ok(())
 }
@@ -1241,41 +1207,29 @@ fn test_is_true_false() -> Result<(), CdvSqlError> {
                 active IS NOT FALSE,
             FROM tests.data.customers
     "#;
-    let results = engine.execute_commands(sql)?;
+    let mut results = engine.execute_commands(sql)?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.first_mut().unwrap();
 
     assert_eq!(results.number_of_columns(), 5);
 
     let customers = get_customers();
 
-    assert_eq!(results.number_of_rows(), customers.len());
-
-    for (index, customer) in customers.iter().enumerate() {
-        let active = results.value(&Row::from_index(index), &ColumnName::simple("active"));
-        let is_true = results.value(
-            &Row::from_index(index),
-            &ColumnName::simple("active IS TRUE"),
-        );
-        let is_not_true = results.value(
-            &Row::from_index(index),
-            &ColumnName::simple("active IS NOT TRUE"),
-        );
-        let is_false = results.value(
-            &Row::from_index(index),
-            &ColumnName::simple("active IS FALSE"),
-        );
-        let is_not_false = results.value(
-            &Row::from_index(index),
-            &ColumnName::simple("active IS NOT FALSE"),
-        );
+    for customer in customers.iter() {
+        assert_eq!(results.next_if_possible(), true);
+        let active = results.value(&ColumnName::simple("active"));
+        let is_true = results.value(&ColumnName::simple("active IS TRUE"));
+        let is_not_true = results.value(&ColumnName::simple("active IS NOT TRUE"));
+        let is_false = results.value(&ColumnName::simple("active IS FALSE"));
+        let is_not_false = results.value(&ColumnName::simple("active IS NOT FALSE"));
         assert_eq!(active.deref(), &Value::Bool(customer.active));
         assert_eq!(is_true.deref(), &Value::Bool(customer.active));
         assert_eq!(is_not_true.deref(), &Value::Bool(!customer.active));
         assert_eq!(is_false.deref(), &Value::Bool(!customer.active));
         assert_eq!(is_not_false.deref(), &Value::Bool(customer.active));
     }
+    assert_eq!(results.next_if_possible(), false);
 
     Ok(())
 }
@@ -1295,26 +1249,56 @@ fn test_in_list() -> Result<(), CdvSqlError> {
                 "customer id" NOT in (5667204520293600582, 8181115030395395092) as not_in_list,
             FROM tests.data.sales
     "#;
-    let results = engine.execute_commands(sql)?;
+    let mut results = engine.execute_commands(sql)?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = results.first_mut().unwrap();
 
     assert_eq!(results.number_of_columns(), 2);
 
     let sales = get_sales();
 
-    assert_eq!(results.number_of_rows(), sales.len());
-
-    for (index, sale) in sales.iter().enumerate() {
+    for sale in sales.iter() {
+        assert_eq!(results.next_if_possible(), true);
         let expected =
             sale.customer_id == 5667204520293600582 || sale.customer_id == 8181115030395395092;
-        let in_list = results.value(&Row::from_index(index), &ColumnName::simple("in_list"));
-        let not_in_list =
-            results.value(&Row::from_index(index), &ColumnName::simple("not_in_list"));
+        let in_list = results.value(&ColumnName::simple("in_list"));
+        let not_in_list = results.value(&ColumnName::simple("not_in_list"));
         assert_eq!(in_list.deref(), &Value::Bool(expected));
         assert_eq!(not_in_list.deref(), &Value::Bool(!expected));
     }
+    assert_eq!(results.next_if_possible(), false);
 
+    Ok(())
+}
+#[test]
+fn sql_tests() -> Result<(), CdvSqlError> {
+    let paths = fs::read_dir("tests/sqls/")?;
+
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    for path in paths {
+        let path = path?.path();
+        println!("Testing: {:?}", path.file_name().unwrap());
+        let file = path.join("query.sql");
+        let sql = fs::read_to_string(file)?;
+        for (idx, mut results) in (engine.execute_commands(&sql)?).into_iter().enumerate() {
+            let mut output = Vec::new();
+            {
+                let mut writer = new_csv_writer(&mut output);
+                writer.write(&mut *results)?;
+            }
+            let output = String::from_utf8(output).unwrap();
+
+            let result_file = path.join(format!("results.{}.csv", idx));
+            let expected_data = fs::read_to_string(result_file)?;
+            assert_eq!(output, expected_data);
+        }
+    }
     Ok(())
 }

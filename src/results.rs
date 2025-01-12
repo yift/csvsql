@@ -2,20 +2,6 @@ use std::{fmt::Display, rc::Rc};
 
 use crate::{util::SmartReference, value::Value};
 
-#[derive(Clone)]
-pub struct Row {
-    row: usize,
-}
-
-impl Row {
-    pub fn get_index(&self) -> usize {
-        self.row
-    }
-    pub fn from_index(row: usize) -> Self {
-        Self { row }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Column {
     column: usize,
@@ -107,24 +93,21 @@ impl Display for ColumnName {
 }
 
 pub trait ResultSet {
-    fn number_of_rows(&self) -> usize;
     fn number_of_columns(&self) -> usize;
     fn column_name(&self, column: &Column) -> Option<ColumnName>;
     fn column_index(&self, name: &ColumnName) -> Option<Column>;
     fn result_name(&self) -> Option<&Rc<ResultName>>;
-    fn get(&self, row: &Row, column: &Column) -> SmartReference<Value>;
-
-    fn value(&self, row: &Row, name: &ColumnName) -> SmartReference<Value> {
-        match self.column_index(name) {
-            Some(column) => self.get(row, &column),
-            None => Value::Empty.into(),
-        }
-    }
-    fn rows(&self) -> Box<dyn Iterator<Item = Row>> {
-        Box::new((0..self.number_of_rows()).map(|row| Row { row }))
-    }
     fn columns(&self) -> Box<dyn Iterator<Item = Column>> {
         Box::new((0..self.number_of_columns()).map(|column| Column { column }))
+    }
+    fn next_if_possible(&mut self) -> bool;
+    fn revert(&mut self);
+    fn get<'a>(&'a self, column: &Column) -> SmartReference<'a, Value>;
+    fn value(&self, name: &ColumnName) -> SmartReference<Value> {
+        match self.column_index(name) {
+            Some(column) => self.get(&column),
+            None => Value::Empty.into(),
+        }
     }
 }
 

@@ -9,7 +9,6 @@ use sqlparser::ast::Ident;
 use crate::results::Column;
 use crate::results::ColumnName;
 use crate::results::ResultName;
-use crate::results::Row;
 use crate::util::SmartReference;
 use crate::{results::ResultSet, value::Value};
 
@@ -80,11 +79,9 @@ struct FileResultSet {
     data: Vec<Vec<Value>>,
     file_name: Rc<ResultName>,
     columns: Columns,
+    index: usize,
 }
 impl ResultSet for FileResultSet {
-    fn number_of_rows(&self) -> usize {
-        self.data.len()
-    }
     fn number_of_columns(&self) -> usize {
         self.columns.columns.len()
     }
@@ -105,9 +102,19 @@ impl ResultSet for FileResultSet {
             None
         }
     }
-    fn get(&self, row: &Row, column: &Column) -> SmartReference<Value> {
+    fn next_if_possible(&mut self) -> bool {
+        self.index += 1;
+        self.index <= self.data.len()
+    }
+    fn revert(&mut self) {
+        self.index = 0;
+    }
+    fn get<'a>(&'a self, column: &Column) -> SmartReference<'a, Value> {
+        if self.index == 0 {
+            return Value::Empty.into();
+        }
         self.data
-            .get(row.get_index())
+            .get(self.index - 1)
             .and_then(|l| l.get(column.get_index()))
             .unwrap_or(&Value::Empty)
             .into()
@@ -160,11 +167,12 @@ impl FileResultSet {
             data,
             file_name: Rc::new(result_name),
             columns,
+            index: 0,
         })
     }
 }
 
-pub fn read_file(
+pub fn read_file<'a>(
     file_name: &[Ident],
     root: &Path,
     first_line_as_name: bool,

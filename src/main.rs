@@ -14,10 +14,10 @@ fn main() -> Result<(), CdvSqlError> {
 
     if let Some(commands) = args.command {
         for command in commands {
-            for results in engine.execute_commands(&command)? {
+            for mut results in engine.execute_commands(&command)? {
                 let stdout = io::stdout().lock();
                 let mut writer = new_csv_writer(stdout);
-                writer.write(&*results)?;
+                writer.write(&mut *results)?;
             }
         }
     } else {
@@ -30,10 +30,10 @@ fn main() -> Result<(), CdvSqlError> {
             if let Some(line) = stdin.lock().lines().next() {
                 let command = line?;
 
-                for results in engine.execute_commands(&command)? {
+                for mut results in engine.execute_commands(&command)? {
                     let stdout = io::stdout().lock();
                     let mut writer = new_csv_writer(stdout);
-                    writer.write(&*results)?;
+                    writer.write(&mut *results)?;
                 }
             } else {
                 return Ok(());

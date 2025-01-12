@@ -4,7 +4,6 @@ use sqlparser::ast::Ident;
 
 use crate::results::Column;
 use crate::results::ResultName;
-use crate::results::Row;
 use crate::results::{ColumnName, ResultSet};
 use crate::util::SmartReference;
 use crate::value::Value;
@@ -15,9 +14,6 @@ struct NamedResultSet {
 }
 
 impl ResultSet for NamedResultSet {
-    fn number_of_rows(&self) -> usize {
-        self.results.number_of_rows()
-    }
     fn number_of_columns(&self) -> usize {
         self.results.number_of_columns()
     }
@@ -37,12 +33,17 @@ impl ResultSet for NamedResultSet {
             None
         }
     }
-
-    fn get(&self, row: &Row, column: &Column) -> SmartReference<Value> {
-        self.results.get(row, column)
-    }
     fn result_name(&self) -> Option<&Rc<ResultName>> {
         Some(&self.name)
+    }
+    fn next_if_possible(&mut self) -> bool {
+        self.results.next_if_possible()
+    }
+    fn revert(&mut self) {
+        self.results.revert()
+    }
+    fn get<'a>(&'a self, column: &Column) -> SmartReference<'a, Value> {
+        self.results.get(column)
     }
 }
 pub fn alias_results(alias: &Ident, results: Box<dyn ResultSet>) -> Box<dyn ResultSet> {

@@ -79,3 +79,11 @@ impl<T: Display> Display for SmartReference<'_, T> {
         }
     }
 }
+impl<T: Clone> SmartReference<'_, T> {
+    pub fn extract(self) -> T {
+        match self {
+            SmartReference::Owned(t) => t,
+            SmartReference::Borrowed(t) => t.clone(),
+        }
+    }
+}

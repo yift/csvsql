@@ -11,7 +11,7 @@ use bigdecimal::Zero;
 use chrono::{NaiveDate, NaiveDateTime};
 use thiserror::Error;
 
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 pub enum Value {
     Empty,
     Bool(bool),

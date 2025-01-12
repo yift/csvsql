@@ -3,6 +3,7 @@ use sqlparser::ast::{GroupByExpr, Query, Select, SetExpr, Statement, TableFactor
 use crate::cartesian_product_results::join;
 use crate::error::CdvSqlError;
 use crate::file_results::read_file;
+use crate::filter_results::make_filter;
 use crate::named_results::alias_results;
 use crate::projections::make_projection;
 use crate::{engine::Engine, results::ResultSet};
@@ -124,9 +125,6 @@ impl Extractor for Select {
             ));
         }
 
-        if self.selection.is_some() {
-            return Err(CdvSqlError::ToDo("SELECT ... WHERE".to_string()));
-        }
         if self.having.is_some() {
             return Err(CdvSqlError::ToDo("SELECT ... HAVING".to_string()));
         }
@@ -167,7 +165,9 @@ impl Extractor for Select {
             return Err(CdvSqlError::Unsupported("SELECT without FROM".to_string()));
         };
 
-        make_projection(product, &self.projection)
+        let filter = make_filter(engine, &self.selection, product)?;
+
+        make_projection(engine, filter, &self.projection)
     }
 }
 

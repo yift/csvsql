@@ -5,6 +5,7 @@ pub mod engine;
 pub mod error;
 mod extractor;
 mod file_results;
+mod filter_results;
 mod named_results;
 mod projections;
 pub mod results;

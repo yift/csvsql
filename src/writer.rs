@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::results::ResultSet;
 
 pub trait Writer {
-    fn write(&mut self, results: &dyn ResultSet) -> Result<(), WriterError>;
+    fn write(&mut self, results: &mut dyn ResultSet) -> Result<(), WriterError>;
 }
 
 struct CsvWriter<W: Write> {
@@ -14,17 +14,17 @@ struct CsvWriter<W: Write> {
 }
 
 impl<W: Write> Writer for CsvWriter<W> {
-    fn write(&mut self, results: &dyn ResultSet) -> Result<(), WriterError> {
+    fn write(&mut self, results: &mut dyn ResultSet) -> Result<(), WriterError> {
         let headers: Vec<_> = results
             .columns()
             .map(|column| results.column_name(&column))
             .map(|name| name.map(|c| c.to_string()).unwrap_or_default())
             .collect();
         self.writer.write_record(&headers)?;
-        for row in results.rows() {
+        while results.next_if_possible() {
             let line: Vec<_> = results
                 .columns()
-                .map(|column| results.get(&row, &column))
+                .map(|column| results.get(&column))
                 .map(|f| f.to_string())
                 .collect();
             self.writer.write_record(line)?
@@ -57,7 +57,6 @@ mod tests {
     use crate::results::Column;
     use crate::results::ColumnName;
     use crate::results::ResultName;
-    use crate::results::Row;
     use crate::util::SmartReference;
     use crate::value::Value;
     use std::rc::Rc;
@@ -66,11 +65,9 @@ mod tests {
     fn write_writes_csv_output() -> Result<(), WriterError> {
         struct Results {
             values: Vec<Vec<Value>>,
+            index: usize,
         }
         impl ResultSet for Results {
-            fn number_of_rows(&self) -> usize {
-                self.values.first().unwrap().len()
-            }
             fn number_of_columns(&self) -> usize {
                 self.values.len()
             }
@@ -84,12 +81,19 @@ mod tests {
             fn result_name(&self) -> Option<&Rc<ResultName>> {
                 None
             }
-            fn get(&self, row: &Row, column: &Column) -> SmartReference<Value> {
+            fn get(&self, column: &Column) -> SmartReference<Value> {
                 self.values
                     .get(column.get_index())
-                    .and_then(|v| v.get(row.get_index()))
+                    .and_then(|v| v.get(self.index - 1))
                     .unwrap_or(&Value::Empty)
                     .into()
+            }
+            fn next_if_possible(&mut self) -> bool {
+                self.index += 1;
+                self.values.len() >= self.index
+            }
+            fn revert(&mut self) {
+                self.index = 0;
             }
         }
         let mut values = Vec::new();
@@ -100,12 +104,12 @@ mod tests {
             }
             values.push(data);
         }
-        let results = Results { values };
+        let mut results = Results { values, index: 0 };
         let mut write = Vec::new();
 
         {
             let mut writer = new_csv_writer(&mut write);
-            writer.write(&results)?;
+            writer.write(&mut results)?;
         }
 
         let lines = String::from_utf8(write).unwrap();

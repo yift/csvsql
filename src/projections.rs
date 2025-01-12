@@ -1,21 +1,22 @@
-use sqlparser::ast::{BinaryOperator, Expr, SelectItem, WildcardAdditionalOptions};
+use sqlparser::ast::{BinaryOperator, Expr, Query, SelectItem, WildcardAdditionalOptions};
 
+use crate::engine::Engine;
 use crate::error::CdvSqlError;
+use crate::extractor::Extractor;
 use crate::results::ResultName;
 use crate::util::SmartReference;
-use crate::value;
 use crate::{
-    results::{Column, ColumnName, ResultSet, Row},
+    results::{Column, ColumnName, ResultSet},
     value::Value,
 };
 use itertools::Itertools;
 use sqlparser::ast::Value as AstValue;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::rc::Rc;
 
-trait Projection {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value>;
+pub trait Projection {
+    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value>;
     fn name(&self) -> SmartReference<'_, ColumnName>;
 }
 struct ColumnProjection {
@@ -23,8 +24,8 @@ struct ColumnProjection {
     column_name: ColumnName,
 }
 impl Projection for ColumnProjection {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
-        results.get(row, &self.column)
+    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
+        results.get(&self.column)
     }
     fn name(&self) -> SmartReference<'_, ColumnName> {
         SmartReference::Borrowed(&self.column_name)
@@ -38,9 +39,6 @@ struct ResultsWithProjections {
 }
 
 impl ResultSet for ResultsWithProjections {
-    fn number_of_rows(&self) -> usize {
-        self.results.number_of_rows()
-    }
     fn number_of_columns(&self) -> usize {
         self.projections.len()
     }
@@ -67,21 +65,28 @@ impl ResultSet for ResultsWithProjections {
         None
     }
 
-    fn get(&self, row: &Row, column: &Column) -> SmartReference<Value> {
+    fn get(&self, column: &Column) -> SmartReference<Value> {
         self.projections
             .get(column.get_index())
-            .map(|p| p.get(&*self.results, row))
+            .map(|p| p.get(&*self.results))
             .unwrap_or(Value::Empty.into())
+    }
+    fn next_if_possible(&mut self) -> bool {
+        self.results.next_if_possible()
+    }
+    fn revert(&mut self) {
+        self.results.revert();
     }
 }
 
 pub fn make_projection(
+    engine: &Engine,
     parent: Box<dyn ResultSet>,
     items: &[SelectItem],
 ) -> Result<Box<dyn ResultSet>, CdvSqlError> {
     let mut projections = Vec::new();
     for item in items {
-        let mut items = item.convert(&*parent)?;
+        let mut items = item.convert(&*parent, engine)?;
         projections.append(&mut items);
     }
     let mut names: HashMap<String, Vec<Column>> = HashMap::new();
@@ -98,15 +103,23 @@ pub fn make_projection(
     }))
 }
 trait Convert {
-    fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError>;
+    fn convert(
+        &self,
+        parent: &dyn ResultSet,
+        engine: &Engine,
+    ) -> Result<Vec<Box<dyn Projection>>, CdvSqlError>;
 }
 impl Convert for SelectItem {
-    fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+    fn convert(
+        &self,
+        parent: &dyn ResultSet,
+        engine: &Engine,
+    ) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
         match self {
-            SelectItem::Wildcard(options) => options.convert(parent),
-            SelectItem::UnnamedExpr(exp) => exp.convert(parent),
+            SelectItem::Wildcard(options) => options.convert(parent, engine),
+            SelectItem::UnnamedExpr(exp) => exp.convert(parent, engine),
             SelectItem::ExprWithAlias { expr, alias } => {
-                let data = expr.convert_single(parent)?;
+                let data = expr.convert_single(parent, engine)?;
                 let alias = ColumnName::simple(&alias.value);
                 Ok(vec![Box::new(AliasProjection { data, alias })])
             }
@@ -115,7 +128,11 @@ impl Convert for SelectItem {
     }
 }
 impl Convert for WildcardAdditionalOptions {
-    fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+    fn convert(
+        &self,
+        parent: &dyn ResultSet,
+        _: &Engine,
+    ) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
         if self.opt_ilike.is_some() {
             return Err(CdvSqlError::Unsupported("Select * ILIKE".into()));
         }
@@ -147,8 +164,12 @@ impl Convert for WildcardAdditionalOptions {
         Ok(projections)
     }
 }
-trait SingleConvert {
-    fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError>;
+pub trait SingleConvert {
+    fn convert_single(
+        &self,
+        parent: &dyn ResultSet,
+        engine: &Engine,
+    ) -> Result<Box<dyn Projection>, CdvSqlError>;
 }
 
 trait BinaryFunction {
@@ -447,8 +468,8 @@ struct AliasProjection {
     alias: ColumnName,
 }
 impl Projection for AliasProjection {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
-        self.data.get(results, row)
+    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
+        self.data.get(results)
     }
     fn name(&self) -> SmartReference<'_, ColumnName> {
         SmartReference::Borrowed(&self.alias)
@@ -478,16 +499,20 @@ impl Projection for BinaryProjection {
         };
         ColumnName::simple(&name).into()
     }
-    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
-        let left = self.left.get(results, row);
-        let right = self.right.get(results, row);
+    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
+        let left = self.left.get(results);
+        let right = self.right.get(results);
         self.operator.calculate(left, right)
     }
 }
 
 impl<T: SingleConvert> Convert for T {
-    fn convert(&self, parent: &dyn ResultSet) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
-        let result = self.convert_single(parent)?;
+    fn convert(
+        &self,
+        parent: &dyn ResultSet,
+        engine: &Engine,
+    ) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+        let result = self.convert_single(parent, engine)?;
         Ok(vec![result])
     }
 }
@@ -496,7 +521,7 @@ struct ValueProjection {
     name: String,
 }
 impl Projection for ValueProjection {
-    fn get<'a>(&'a self, _: &'a dyn ResultSet, _: &Row) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, _: &'a dyn ResultSet) -> SmartReference<'a, Value> {
         SmartReference::Borrowed(&self.value)
     }
     fn name(&self) -> SmartReference<'_, ColumnName> {
@@ -512,7 +537,6 @@ trait UnaryFunction {
 }
 
 enum UnaryFunctionType {
-    Prefix,
     Postfix,
     Function,
 }
@@ -522,13 +546,12 @@ struct UnartyProjection {
 }
 
 impl Projection for UnartyProjection {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
-        let value = self.value.get(results, row);
+    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
+        let value = self.value.get(results);
         self.operator.calculate(value)
     }
     fn name(&self) -> SmartReference<'_, ColumnName> {
         let name = match self.operator.function_type() {
-            UnaryFunctionType::Prefix => format!("{} {}", self.operator.name(), self.value.name(),),
             UnaryFunctionType::Postfix => {
                 format!("{} {}", self.value.name(), self.operator.name(),)
             }
@@ -629,10 +652,10 @@ impl Projection for InProjection {
         let name = format!("{}{} IN ({})", neg, self.value.name(), list);
         ColumnName::simple(&name).into()
     }
-    fn get<'a>(&'a self, results: &'a dyn ResultSet, row: &Row) -> SmartReference<'a, Value> {
-        let value = self.value.get(results, row);
+    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
+        let value = self.value.get(results);
         for item in &self.list {
-            let item = item.get(results, row);
+            let item = item.get(results);
             if item == value {
                 return Value::Bool(!self.negated).into();
             }
@@ -641,12 +664,66 @@ impl Projection for InProjection {
     }
 }
 
+struct InSubquery {
+    value: Box<dyn Projection>,
+    list: HashSet<Value>,
+    negated: bool,
+    name: ColumnName,
+}
+
+impl Projection for InSubquery {
+    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
+        let value = self.value.get(results);
+        let contains = self.list.contains(value.deref());
+        Value::Bool(self.negated != contains).into()
+    }
+    fn name(&self) -> SmartReference<'_, ColumnName> {
+        (&self.name).into()
+    }
+}
+impl InSubquery {
+    fn new(
+        expr: &Expr,
+        subquery: &Query,
+        negated: &bool,
+        engine: &Engine,
+        parent: &dyn ResultSet,
+    ) -> Result<Self, CdvSqlError> {
+        let mut results = subquery.extract(engine)?;
+        if results.number_of_columns() != 1 {
+            return Err(CdvSqlError::Unsupported(
+                "IN (SELECT ...) with more than one column".into(),
+            ));
+        }
+        let not = if *negated { "NOT " } else { "" };
+        let name = format!("{} {}IN ({})", expr, not, subquery);
+        let value = expr.convert_single(parent, engine)?;
+        let mut list = HashSet::new();
+        let col = Column::from_index(0);
+        while results.next_if_possible() {
+            let value = results.get(&col);
+            let value = value.extract();
+            list.insert(value);
+        }
+        Ok(Self {
+            negated: *negated,
+            list,
+            value,
+            name: ColumnName::simple(&name),
+        })
+    }
+}
+
 impl SingleConvert for Expr {
-    fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError> {
+    fn convert_single(
+        &self,
+        parent: &dyn ResultSet,
+        engine: &Engine,
+    ) -> Result<Box<dyn Projection>, CdvSqlError> {
         match self {
             Expr::Identifier(ident) => {
                 let name = ColumnName::simple(&ident.value);
-                name.convert_single(parent)
+                name.convert_single(parent, engine)
             }
             Expr::CompoundIdentifier(idents) => {
                 let mut root = ResultName::root();
@@ -655,7 +732,7 @@ impl SingleConvert for Expr {
                     if names.peek().is_none() {
                         let name = ColumnName::new(&Rc::new(root), &name.value);
 
-                        return name.convert_single(parent);
+                        return name.convert_single(parent, engine);
                     } else {
                         root = root.append(&name.value);
                     }
@@ -663,8 +740,8 @@ impl SingleConvert for Expr {
                 Err(CdvSqlError::NoSelect)
             }
             Expr::BinaryOp { left, op, right } => {
-                let left = left.convert_single(parent)?;
-                let right = right.convert_single(parent)?;
+                let left = left.convert_single(parent, engine)?;
+                let right = right.convert_single(parent, engine)?;
                 let operator: Box<dyn BinaryFunction> = match op {
                     BinaryOperator::Plus => Box::new(Plus {}),
                     BinaryOperator::Multiply => Box::new(Times {}),
@@ -710,32 +787,32 @@ impl SingleConvert for Expr {
                 }
             }
             Expr::IsFalse(val) => {
-                let value = val.convert_single(parent)?;
+                let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsFalse {});
                 Ok(Box::new(UnartyProjection { value, operator }))
             }
             Expr::IsNotFalse(val) => {
-                let value = val.convert_single(parent)?;
+                let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsNotFalse {});
                 Ok(Box::new(UnartyProjection { value, operator }))
             }
             Expr::IsTrue(val) => {
-                let value = val.convert_single(parent)?;
+                let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsTrue {});
                 Ok(Box::new(UnartyProjection { value, operator }))
             }
             Expr::IsNotTrue(val) => {
-                let value = val.convert_single(parent)?;
+                let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsNotTrue {});
                 Ok(Box::new(UnartyProjection { value, operator }))
             }
             Expr::IsNull(val) => {
-                let value = val.convert_single(parent)?;
+                let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsNull {});
                 Ok(Box::new(UnartyProjection { value, operator }))
             }
             Expr::IsNotNull(val) => {
-                let value = val.convert_single(parent)?;
+                let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsNotNull {});
                 Ok(Box::new(UnartyProjection { value, operator }))
             }
@@ -744,17 +821,25 @@ impl SingleConvert for Expr {
                 list,
                 negated,
             } => {
-                let value = expr.convert_single(parent)?;
+                let value = expr.convert_single(parent, engine)?;
                 let mut items = Vec::new();
                 for item in list {
-                    items.push(item.convert_single(parent)?);
+                    items.push(item.convert_single(parent, engine)?);
                 }
 
                 Ok(Box::new(InProjection {
                     value,
                     list: items,
-                    negated: negated.clone(),
+                    negated: *negated,
                 }))
+            }
+            Expr::InSubquery {
+                expr,
+                subquery,
+                negated,
+            } => {
+                let expr = InSubquery::new(expr, subquery, negated, engine, parent)?;
+                Ok(Box::new(expr))
             }
             _ => Err(CdvSqlError::ToDo(format!(
                 "Select expression like {}",
@@ -764,7 +849,11 @@ impl SingleConvert for Expr {
     }
 }
 impl SingleConvert for ColumnName {
-    fn convert_single(&self, parent: &dyn ResultSet) -> Result<Box<dyn Projection>, CdvSqlError> {
+    fn convert_single(
+        &self,
+        parent: &dyn ResultSet,
+        _: &Engine,
+    ) -> Result<Box<dyn Projection>, CdvSqlError> {
         let Some(column) = parent.column_index(self) else {
             return Err(CdvSqlError::NoSuchColumn(self.name().into()));
         };

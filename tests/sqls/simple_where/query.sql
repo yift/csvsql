@@ -1,0 +1,1 @@
+SELECT id FROM tests.data.customers WHERE active;

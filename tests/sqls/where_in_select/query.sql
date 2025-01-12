@@ -1,0 +1,1 @@
+SELECT sales.id, sales.price FROM tests.data.sales WHERE sales."customer id" IN (SELECT id FROM tests.data.customers WHERE active);
