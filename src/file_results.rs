@@ -172,7 +172,7 @@ impl FileResultSet {
     }
 }
 
-pub fn read_file<'a>(
+pub fn read_file(
     file_name: &[Ident],
     root: &Path,
     first_line_as_name: bool,

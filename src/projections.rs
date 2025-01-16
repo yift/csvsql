@@ -1,4 +1,7 @@
-use sqlparser::ast::{BinaryOperator, Expr, Query, SelectItem, WildcardAdditionalOptions};
+use regex::Regex;
+use sqlparser::ast::{
+    BinaryOperator, Expr, Query, SelectItem, UnaryOperator, WildcardAdditionalOptions,
+};
 
 use crate::engine::Engine;
 use crate::error::CdvSqlError;
@@ -537,6 +540,7 @@ trait UnaryFunction {
 }
 
 enum UnaryFunctionType {
+    Prefix,
     Postfix,
     Function,
 }
@@ -552,6 +556,9 @@ impl Projection for UnartyProjection {
     }
     fn name(&self) -> SmartReference<'_, ColumnName> {
         let name = match self.operator.function_type() {
+            UnaryFunctionType::Prefix => {
+                format!("{} {}", self.operator.name(), self.value.name(),)
+            }
             UnaryFunctionType::Postfix => {
                 format!("{} {}", self.value.name(), self.operator.name(),)
             }
@@ -640,6 +647,55 @@ impl UnaryFunction for IsNotNull {
     }
 }
 
+struct Not {}
+impl UnaryFunction for Not {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        match value.deref() {
+            Value::Empty => Value::Empty.into(),
+            Value::Bool(false) => Value::Bool(true).into(),
+            _ => Value::Bool(false).into(),
+        }
+    }
+    fn name(&self) -> &str {
+        "NOT"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Prefix
+    }
+}
+
+struct Negative {}
+impl UnaryFunction for Negative {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        match value.deref() {
+            Value::Number(num) => Value::Number(-num).into(),
+            _ => Value::Empty.into(),
+        }
+    }
+    fn name(&self) -> &str {
+        "-"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Prefix
+    }
+}
+
+struct PlusUnary {}
+impl UnaryFunction for PlusUnary {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        match value.deref() {
+            Value::Number(num) => Value::Number(num.clone()).into(),
+            _ => Value::Empty.into(),
+        }
+    }
+    fn name(&self) -> &str {
+        "+"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Prefix
+    }
+}
+
 struct InProjection {
     value: Box<dyn Projection>,
     list: Vec<Box<dyn Projection>>,
@@ -714,6 +770,103 @@ impl InSubquery {
     }
 }
 
+struct Between {
+    value: Box<dyn Projection>,
+    low: Box<dyn Projection>,
+    high: Box<dyn Projection>,
+    negated: bool,
+}
+
+impl Projection for Between {
+    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
+        let value = self.value.get(results);
+        let low = self.low.get(results);
+        if *value < *low {
+            return Value::Bool(self.negated).into();
+        }
+        let high = self.high.get(results);
+        if *value > *high {
+            Value::Bool(self.negated).into()
+        } else {
+            Value::Bool(!self.negated).into()
+        }
+    }
+    fn name(&self) -> SmartReference<'_, ColumnName> {
+        let neg = if self.negated { "NOT " } else { "" };
+        let name = format!(
+            "{}{} BETWEEN {} AMD {}",
+            neg,
+            self.value.name(),
+            self.low.name(),
+            self.high.name()
+        );
+        ColumnName::simple(&name).into()
+    }
+}
+impl Between {
+    fn new(
+        expr: &Expr,
+        low: &Expr,
+        high: &Expr,
+        negated: &bool,
+        engine: &Engine,
+        parent: &dyn ResultSet,
+    ) -> Result<Self, CdvSqlError> {
+        let value = expr.convert_single(parent, engine)?;
+        let low = low.convert_single(parent, engine)?;
+        let high = high.convert_single(parent, engine)?;
+        Ok(Self {
+            negated: *negated,
+            low,
+            high,
+            value,
+        })
+    }
+}
+
+struct RegexProjection {
+    value: Box<dyn Projection>,
+    regex: Box<dyn Projection>,
+    negated: bool,
+}
+
+impl Projection for RegexProjection {
+    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
+        let value = self.value.get(results);
+        let regex = self.regex.get(results);
+        let Ok(regex) = Regex::new(&regex.to_string()) else {
+            return Value::Bool(self.negated).into();
+        };
+        let value = value.to_string();
+        if regex.is_match(&value) {
+            Value::Bool(!self.negated).into()
+        } else {
+            Value::Bool(self.negated).into()
+        }
+    }
+    fn name(&self) -> SmartReference<'_, ColumnName> {
+        let neg = if self.negated { "NOT " } else { "" };
+        let name = format!("{}{} REGEXP {}", neg, self.value.name(), self.regex.name(),);
+        ColumnName::simple(&name).into()
+    }
+}
+impl RegexProjection {
+    fn new(
+        expr: &Expr,
+        regex: &Expr,
+        negated: &bool,
+        engine: &Engine,
+        parent: &dyn ResultSet,
+    ) -> Result<Self, CdvSqlError> {
+        let value = expr.convert_single(parent, engine)?;
+        let regex = regex.convert_single(parent, engine)?;
+        Ok(Self {
+            negated: *negated,
+            regex,
+            value,
+        })
+    }
+}
 impl SingleConvert for Expr {
     fn convert_single(
         &self,
@@ -841,6 +994,44 @@ impl SingleConvert for Expr {
                 let expr = InSubquery::new(expr, subquery, negated, engine, parent)?;
                 Ok(Box::new(expr))
             }
+            Expr::Between {
+                expr,
+                negated,
+                low,
+                high,
+            } => {
+                let expr = Between::new(expr, low, high, negated, engine, parent)?;
+                Ok(Box::new(expr))
+            }
+            Expr::RLike {
+                negated,
+                expr,
+                pattern,
+                regexp: _,
+            } => {
+                let expr = RegexProjection::new(expr, pattern, negated, engine, parent)?;
+                Ok(Box::new(expr))
+            }
+            Expr::SimilarTo {
+                negated,
+                expr,
+                pattern,
+                escape_char: _,
+            } => {
+                let expr = RegexProjection::new(expr, pattern, negated, engine, parent)?;
+                Ok(Box::new(expr))
+            }
+            Expr::UnaryOp { op, expr } => {
+                let operator: Box<dyn UnaryFunction> = match op {
+                    UnaryOperator::Minus => Box::new(Negative {}),
+                    UnaryOperator::Plus => Box::new(PlusUnary {}),
+                    UnaryOperator::Not => Box::new(Not {}),
+                    _ => return Err(CdvSqlError::Unsupported(format!("Operator: {}", op))),
+                };
+                let value = expr.convert_single(parent, engine)?;
+                Ok(Box::new(UnartyProjection { value, operator }))
+            }
+
             _ => Err(CdvSqlError::ToDo(format!(
                 "Select expression like {}",
                 self

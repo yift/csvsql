@@ -1,0 +1,11 @@
+company,NOT company REGEXP 'Group',company REGEXP 'Group',company REGEXP 'Group',company REGEXP '['
+Haley Inc,TRUE,FALSE,FALSE,FALSE
+Schinner and Sons,TRUE,FALSE,FALSE,FALSE
+Abshire and MacGyver Group,FALSE,TRUE,TRUE,FALSE
+Dach and Sons,TRUE,FALSE,FALSE,FALSE
+Block and Nicolas and Sons,TRUE,FALSE,FALSE,FALSE
+Jerde and Treutel and Sons,TRUE,FALSE,FALSE,FALSE
+Leuschke Group,FALSE,TRUE,TRUE,FALSE
+Schroeder and Dare Group,FALSE,TRUE,TRUE,FALSE
+Yundt and Sons,TRUE,FALSE,FALSE,FALSE
+Schamberger and Durgan Inc,TRUE,FALSE,FALSE,FALSE
