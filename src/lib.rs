@@ -1,5 +1,6 @@
 pub mod args;
 mod cartesian_product_results;
+mod cast;
 mod dialect;
 pub mod engine;
 pub mod error;

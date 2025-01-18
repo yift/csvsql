@@ -1271,6 +1271,7 @@ fn test_in_list() -> Result<(), CdvSqlError> {
 
     Ok(())
 }
+
 #[test]
 fn sql_tests() -> Result<(), CdvSqlError> {
     let paths = fs::read_dir("tests/sqls/")?;

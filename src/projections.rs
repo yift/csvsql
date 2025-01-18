@@ -3,6 +3,7 @@ use sqlparser::ast::{
     BinaryOperator, Expr, Query, SelectItem, UnaryOperator, WildcardAdditionalOptions,
 };
 
+use crate::cast::create_cast;
 use crate::engine::Engine;
 use crate::error::CdvSqlError;
 use crate::extractor::Extractor;
@@ -1030,6 +1031,18 @@ impl SingleConvert for Expr {
                 };
                 let value = expr.convert_single(parent, engine)?;
                 Ok(Box::new(UnartyProjection { value, operator }))
+            }
+            Expr::Cast {
+                kind: _,
+                expr,
+                data_type,
+                format,
+            } => {
+                if format.is_some() {
+                    return Err(CdvSqlError::Unsupported("CAST with format".to_string()));
+                }
+                let value = expr.convert_single(parent, engine)?;
+                create_cast(data_type, value)
             }
 
             _ => Err(CdvSqlError::ToDo(format!(
