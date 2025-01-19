@@ -1044,6 +1044,23 @@ impl SingleConvert for Expr {
                 let value = expr.convert_single(parent, engine)?;
                 create_cast(data_type, value)
             }
+            Expr::Convert {
+                is_try: _,
+                expr,
+                data_type,
+                charset,
+                target_before_value: _,
+                styles: _,
+            } => {
+                if charset.is_some() {
+                    return Err(CdvSqlError::Unsupported("CONVERT with charset".to_string()));
+                };
+                let Some(data_type) = data_type else {
+                    return Err(CdvSqlError::Unsupported("CONVERT with charset".to_string()));
+                };
+                let value = expr.convert_single(parent, engine)?;
+                create_cast(data_type, value)
+            }
 
             _ => Err(CdvSqlError::ToDo(format!(
                 "Select expression like {}",
