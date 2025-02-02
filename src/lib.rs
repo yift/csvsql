@@ -10,6 +10,7 @@ mod filter_results;
 mod named_results;
 mod projections;
 pub mod results;
+mod simple_result_set_metadata;
 pub mod util;
 pub mod value;
 pub mod writer;

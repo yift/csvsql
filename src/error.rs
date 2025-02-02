@@ -2,10 +2,10 @@ use sqlparser::parser::ParserError;
 use std::io::Error as IoError;
 use thiserror::Error;
 
-use crate::{engine, writer::WriterError};
+use crate::{engine, results::ColumnIndexError, writer::WriterError};
 
 #[derive(Error, Debug)]
-pub enum CdvSqlError {
+pub enum CvsSqlError {
     #[error("Parse error: `{0}`")]
     ParserError(#[from] ParserError),
     #[error("Engine error: `{0}`")]
@@ -18,8 +18,8 @@ pub enum CdvSqlError {
     Unsupported(String),
     #[error("TODO: `{0}`")]
     ToDo(String),
-    #[error("Cannot find columns: `{0}`")]
-    NoSuchColumn(String),
     #[error("Nothing to select")]
     NoSelect,
+    #[error("`{0}`")]
+    ColumnIndexError(#[from] ColumnIndexError),
 }

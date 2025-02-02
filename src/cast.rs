@@ -8,35 +8,30 @@ use chrono::NaiveDateTime;
 use chrono::NaiveTime;
 use sqlparser::ast::DataType;
 
-use crate::error::CdvSqlError;
+use crate::error::CvsSqlError;
 use crate::projections::Projection;
-use crate::results::ColumnName;
 use crate::results::ResultSet;
 use crate::util::SmartReference;
 use crate::value::Value;
 struct Cast {
     to_cast: Box<dyn Projection>,
     data_type: AvailableDataTypes,
+    name: String,
 }
 impl Projection for Cast {
     fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
         let value = self.to_cast.get(results);
         self.data_type.convert(value)
     }
-    fn name(&self) -> SmartReference<'_, ColumnName> {
-        let name = format!(
-            "TRY_CAST({} AS {})",
-            self.to_cast.name(),
-            self.data_type.name()
-        );
-        ColumnName::simple(&name).into()
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 
 pub fn create_cast(
     data_type: &DataType,
     to_cast: Box<dyn Projection>,
-) -> Result<Box<dyn Projection>, CdvSqlError> {
+) -> Result<Box<dyn Projection>, CvsSqlError> {
     let data_type = match data_type {
         DataType::Character(_)
         | DataType::Char(_)
@@ -106,10 +101,15 @@ pub fn create_cast(
         | DataType::Datetime64(_, _)
         | DataType::Timestamp(_, _) => AvailableDataTypes::Timestamp,
 
-        _ => return Err(CdvSqlError::Unsupported(format!("CAST to {}", data_type))),
+        _ => return Err(CvsSqlError::Unsupported(format!("CAST to {}", data_type))),
     };
+    let name = format!("TRY_CAST({} AS {})", to_cast.name(), data_type.name());
 
-    Ok(Box::new(Cast { to_cast, data_type }))
+    Ok(Box::new(Cast {
+        to_cast,
+        data_type,
+        name,
+    }))
 }
 
 enum AvailableDataTypes {

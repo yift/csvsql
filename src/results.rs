@@ -1,4 +1,6 @@
-use std::{fmt::Display, rc::Rc};
+use std::{ops::Deref, rc::Rc};
+
+use thiserror::Error;
 
 use crate::{util::SmartReference, value::Value};
 
@@ -15,102 +17,104 @@ impl Column {
     }
 }
 
-#[derive(Debug)]
-pub struct ResultName {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+pub struct Name {
     elements: Vec<String>,
 }
 
-#[derive(Clone, Debug)]
-pub struct ColumnName {
-    parent: Rc<ResultName>,
-    name: String,
-}
-
-impl ResultName {
-    pub fn root() -> Self {
-        Self {
-            elements: Vec::new(),
-        }
-    }
+impl Name {
     pub fn append(&self, name: &str) -> Self {
         let mut elements = self.elements.clone();
         let name = name.to_string();
         elements.push(name);
         Self { elements }
     }
-    pub fn parent(&self) -> Self {
-        let mut elements = self.elements.clone();
-        elements.pop();
-        Self { elements }
-    }
-    pub fn matches(&self, other: &Self) -> bool {
-        // self can be longer then other
-        if let Some(other_name) = other.elements.last() {
-            if let Some(my_name) = self.elements.last() {
-                if my_name == other_name {
-                    self.parent().matches(&other.parent())
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
+    pub fn parent(&self) -> Option<Self> {
+        if self.elements.len() <= 1 {
+            None
         } else {
-            true
+            let mut elements = self.elements.clone();
+            elements.pop();
+            Some(Self { elements })
         }
     }
-    pub fn names(&self) -> &[String] {
-        &self.elements
+    pub fn full_name(&self) -> String {
+        self.elements.join(".")
+    }
+    pub fn short_name(&self) -> &str {
+        let name = match self.elements.last() {
+            None => "",
+            Some(name) => name,
+        };
+        name
+    }
+    pub fn available_names(&self) -> Vec<Self> {
+        let short_name = self.short_name();
+        let mut parent_list = match self.parent() {
+            Some(parent) => parent
+                .available_names()
+                .iter()
+                .map(|f| f.append(short_name))
+                .collect(),
+            None => vec![],
+        };
+        parent_list.push(short_name.into());
+        parent_list
     }
 }
-impl ColumnName {
-    pub fn new(parent: &Rc<ResultName>, name: &str) -> Self {
+
+impl From<&str> for Name {
+    fn from(value: &str) -> Self {
         Self {
-            parent: parent.clone(),
-            name: name.to_string(),
+            elements: vec![value.to_string()],
         }
     }
-    pub fn simple(name: &str) -> Self {
+}
+impl From<String> for Name {
+    fn from(value: String) -> Self {
         Self {
-            parent: Rc::new(ResultName::root()),
-            name: name.to_string(),
+            elements: vec![value],
         }
     }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn parent(&self) -> &Rc<ResultName> {
-        &self.parent
+}
+impl From<Vec<String>> for Name {
+    fn from(value: Vec<String>) -> Self {
+        Self { elements: value }
     }
 }
 
-impl Display for ColumnName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
-    }
+#[derive(Error, Debug)]
+pub enum ColumnIndexError {
+    #[error("Cannot find columns: `{0}`")]
+    NoSuchColumn(String),
+    #[error("Ambiguous column name: `{0}`")]
+    AmbiguousColumnName(String),
 }
 
-pub trait ResultSet {
+pub trait ResultSetMetadata {
     fn number_of_columns(&self) -> usize;
-    fn column_name(&self, column: &Column) -> Option<ColumnName>;
-    fn column_index(&self, name: &ColumnName) -> Option<Column>;
-    fn result_name(&self) -> Option<&Rc<ResultName>>;
+    fn column_name(&self, column: &Column) -> Option<&Name>;
+    fn result_name(&self) -> Option<&Name>;
+    fn column_index(&self, name: &Name) -> Result<SmartReference<Column>, ColumnIndexError>;
+}
+pub trait ResultSet {
+    fn metadate(&self) -> &Rc<dyn ResultSetMetadata>;
     fn columns(&self) -> Box<dyn Iterator<Item = Column>> {
-        Box::new((0..self.number_of_columns()).map(|column| Column { column }))
+        Box::new((0..self.metadate().number_of_columns()).map(|column| Column { column }))
     }
     fn next_if_possible(&mut self) -> bool;
     fn revert(&mut self);
     fn get<'a>(&'a self, column: &Column) -> SmartReference<'a, Value>;
-    fn value(&self, name: &ColumnName) -> SmartReference<Value> {
-        match self.column_index(name) {
-            Some(column) => self.get(&column),
-            None => Value::Empty.into(),
+    fn value(&self, name: &Name) -> SmartReference<Value> {
+        match self.metadate().column_index(name) {
+            Ok(column) => self.get(column.deref()),
+            Err(_) => Value::Empty.into(),
         }
     }
 }
 
+// TODO: Add tests
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,3 +158,4 @@ mod tests {
         assert!(!first.matches(&second));
     }
 }
+*/

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::io::Error as IoError;
 use std::path::Path;
 use std::rc::Rc;
@@ -6,101 +5,36 @@ use std::rc::Rc;
 use csv::ReaderBuilder;
 use sqlparser::ast::Ident;
 
-use crate::results::Column;
-use crate::results::ColumnName;
-use crate::results::ResultName;
+use crate::results::{Column, Name, ResultSetMetadata};
+use crate::simple_result_set_metadata::SimpleResultSetMetadata;
 use crate::util::SmartReference;
 use crate::{results::ResultSet, value::Value};
 
-struct FileColumn {
-    header: Option<String>,
-    column_index: String,
-}
-
-impl FileColumn {
-    fn new(header: Option<&str>, index: usize) -> Self {
-        let column_index = FileColumn::get_default_header(index);
-        let header = header.map(str::to_string);
-        FileColumn {
-            header,
-            column_index,
+fn get_default_header(index: usize) -> String {
+    let mut index = index;
+    let mut title = String::from("$");
+    let first = 'A' as usize;
+    let size = 'Z' as usize - first + 1;
+    loop {
+        let chr = index % (size);
+        index -= chr;
+        title.insert(0, char::from((chr + first) as u8));
+        if index == 0 {
+            break;
         }
+        index = index / size - 1;
     }
-    fn get_default_header(index: usize) -> String {
-        let mut index = index;
-        let mut title = String::new();
-        let first = 'A' as usize;
-        let size = 'Z' as usize - first + 1;
-        loop {
-            let chr = index % (size);
-            index -= chr;
-            title.insert(0, char::from((chr + first) as u8));
-            if index == 0 {
-                break;
-            }
-            index = index / size - 1;
-        }
-        title
-    }
-    fn name(&self) -> &str {
-        match &self.header {
-            None => &self.column_index,
-            Some(name) => name,
-        }
-    }
-}
-
-#[derive(Default)]
-struct Columns {
-    columns: Vec<FileColumn>,
-    names: HashMap<String, Column>,
-}
-
-impl Columns {
-    fn push(&mut self, column: FileColumn) {
-        let index = self.len();
-        self.names
-            .entry(column.column_index.to_string())
-            .or_insert(Column::from_index(index));
-        if let Some(name) = &column.header {
-            self.names
-                .entry(name.to_string())
-                .or_insert(Column::from_index(index));
-        }
-        self.columns.push(column);
-    }
-
-    fn len(&self) -> usize {
-        self.columns.len()
-    }
+    title
 }
 
 struct FileResultSet {
+    metadata: Rc<dyn ResultSetMetadata>,
     data: Vec<Vec<Value>>,
-    file_name: Rc<ResultName>,
-    columns: Columns,
     index: usize,
 }
 impl ResultSet for FileResultSet {
-    fn number_of_columns(&self) -> usize {
-        self.columns.columns.len()
-    }
-    fn result_name(&self) -> Option<&Rc<ResultName>> {
-        Some(&self.file_name)
-    }
-    fn column_name(&self, column: &Column) -> Option<ColumnName> {
-        self.columns
-            .columns
-            .get(column.get_index())
-            .map(|col| col.name())
-            .map(|name| ColumnName::new(&self.file_name, name))
-    }
-    fn column_index(&self, name: &ColumnName) -> Option<Column> {
-        if self.file_name.matches(name.parent()) {
-            self.columns.names.get(name.name()).cloned()
-        } else {
-            None
-        }
+    fn metadate(&self) -> &Rc<dyn ResultSetMetadata> {
+        &self.metadata
     }
     fn next_if_possible(&mut self) -> bool {
         self.index += 1;
@@ -121,11 +55,22 @@ impl ResultSet for FileResultSet {
     }
 }
 
+trait AppendName {
+    fn append(&self, name: &str) -> Self;
+}
+impl AppendName for Option<Name> {
+    fn append(&self, name: &str) -> Self {
+        match self {
+            None => Some(name.into()),
+            Some(parent) => Some(parent.append(name)),
+        }
+    }
+}
 impl FileResultSet {
     fn new(file_name: &[Ident], root: &Path, first_line_as_name: bool) -> Result<Self, IoError> {
         let mut file_names = file_name.iter().peekable();
         let mut path = root.to_path_buf();
-        let mut result_name = ResultName::root();
+        let mut result_name = None;
         while let Some(name) = file_names.next() {
             let name = name.to_string();
             result_name = result_name.append(&name);
@@ -141,12 +86,12 @@ impl FileResultSet {
             .has_headers(first_line_as_name)
             .from_path(path)?;
 
-        let mut columns = Columns::default();
+        let mut metadata = SimpleResultSetMetadata::new(result_name);
 
         if first_line_as_name {
             let header = reader.headers()?;
-            for (index, h) in header.iter().enumerate() {
-                columns.push(FileColumn::new(Some(h), index));
+            for h in header {
+                metadata.add_column(h);
             }
         }
         let mut data = Vec::new();
@@ -156,17 +101,17 @@ impl FileResultSet {
             for (index, record) in records.iter().enumerate() {
                 let value = Value::from(record);
                 values.push(value);
-                if index >= columns.len() {
-                    columns.push(FileColumn::new(None, index));
+                if index >= metadata.number_of_columns() {
+                    metadata.add_column(&get_default_header(index));
                 }
             }
             data.push(values);
         }
+        let metadata = Rc::new(metadata);
 
         Ok(FileResultSet {
             data,
-            file_name: Rc::new(result_name),
-            columns,
+            metadata,
             index: 0,
         })
     }

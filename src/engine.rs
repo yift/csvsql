@@ -1,4 +1,4 @@
-use crate::error::CdvSqlError;
+use crate::error::CvsSqlError;
 use crate::extractor::Extractor;
 use crate::{args::Args, dialect::FilesDialect, results::ResultSet};
 use sqlparser::parser::Parser;
@@ -25,7 +25,7 @@ impl TryFrom<&Args> for Engine {
 }
 
 impl Engine {
-    pub fn execute_commands(&self, sql: &str) -> Result<Vec<Box<dyn ResultSet>>, CdvSqlError> {
+    pub fn execute_commands(&self, sql: &str) -> Result<Vec<Box<dyn ResultSet>>, CvsSqlError> {
         let dialect = FilesDialect {};
         let mut results = Vec::new();
         for statement in Parser::parse_sql(&dialect, sql)? {

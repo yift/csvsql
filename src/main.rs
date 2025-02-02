@@ -2,13 +2,13 @@ use clap::Parser;
 use csvsql::{
     args::Args,
     engine::Engine,
-    error::CdvSqlError,
+    error::CvsSqlError,
     writer::{new_csv_writer, Writer},
 };
 use std::io::{self};
 use std::io::{BufRead, Write};
 
-fn main() -> Result<(), CdvSqlError> {
+fn main() -> Result<(), CvsSqlError> {
     let args = Args::parse();
     let engine = Engine::try_from(&args)?;
 

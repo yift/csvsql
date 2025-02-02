@@ -1,30 +1,21 @@
 use std::{ops::Deref, rc::Rc};
 
-use sqlparser::ast::Expr;
-
+use crate::error::CvsSqlError;
+use crate::results::ResultSetMetadata;
 use crate::{
     engine::Engine,
-    error::CdvSqlError,
     projections::{Projection, SingleConvert},
     results::{Column, ResultSet},
     value::Value,
 };
+use sqlparser::ast::Expr;
 struct FilteredResults {
     results: Box<dyn ResultSet>,
     condition: Box<dyn Projection>,
 }
 impl ResultSet for FilteredResults {
-    fn number_of_columns(&self) -> usize {
-        self.results.number_of_columns()
-    }
-    fn column_name(&self, column: &Column) -> Option<crate::results::ColumnName> {
-        self.results.column_name(column)
-    }
-    fn column_index(&self, name: &crate::results::ColumnName) -> Option<Column> {
-        self.results.column_index(name)
-    }
-    fn result_name(&self) -> Option<&Rc<crate::results::ResultName>> {
-        self.results.result_name()
+    fn metadate(&self) -> &Rc<dyn ResultSetMetadata> {
+        self.results.metadate()
     }
     fn revert(&mut self) {
         self.results.revert();
@@ -46,7 +37,7 @@ pub fn make_filter(
     engine: &Engine,
     filter: &Option<Expr>,
     results: Box<dyn ResultSet>,
-) -> Result<Box<dyn ResultSet>, CdvSqlError> {
+) -> Result<Box<dyn ResultSet>, CvsSqlError> {
     let Some(condition) = filter else {
         return Ok(results);
     };

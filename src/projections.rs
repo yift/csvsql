@@ -5,70 +5,45 @@ use sqlparser::ast::{
 
 use crate::cast::create_cast;
 use crate::engine::Engine;
-use crate::error::CdvSqlError;
+use crate::error::CvsSqlError;
 use crate::extractor::Extractor;
-use crate::results::ResultName;
+use crate::results::ResultSetMetadata;
+use crate::simple_result_set_metadata::SimpleResultSetMetadata;
 use crate::util::SmartReference;
 use crate::{
-    results::{Column, ColumnName, ResultSet},
+    results::{Column, Name, ResultSet},
     value::Value,
 };
 use itertools::Itertools;
 use sqlparser::ast::Value as AstValue;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::ops::Deref;
 use std::rc::Rc;
 
 pub trait Projection {
     fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value>;
-    fn name(&self) -> SmartReference<'_, ColumnName>;
+    fn name(&self) -> &str;
 }
 struct ColumnProjection {
     column: Column,
-    column_name: ColumnName,
+    column_name: String,
 }
 impl Projection for ColumnProjection {
     fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
         results.get(&self.column)
     }
-    fn name(&self) -> SmartReference<'_, ColumnName> {
-        SmartReference::Borrowed(&self.column_name)
+    fn name(&self) -> &str {
+        &self.column_name
     }
 }
 
 struct ResultsWithProjections {
+    metadata: Rc<dyn ResultSetMetadata>,
     projections: Vec<Box<dyn Projection>>,
-    names: HashMap<String, Vec<Column>>,
     results: Box<dyn ResultSet>,
 }
 
 impl ResultSet for ResultsWithProjections {
-    fn number_of_columns(&self) -> usize {
-        self.projections.len()
-    }
-    fn result_name(&self) -> Option<&Rc<ResultName>> {
-        self.results.result_name()
-    }
-    fn column_name(&self, column: &Column) -> Option<ColumnName> {
-        self.projections
-            .get(column.get_index())
-            .map(|projection| projection.name().clone())
-    }
-    fn column_index(&self, name: &ColumnName) -> Option<Column> {
-        if let Some(projections) = self.names.get(name.name()) {
-            for idx in projections {
-                if self.projections[idx.get_index()]
-                    .name()
-                    .parent()
-                    .matches(name.parent())
-                {
-                    return Some(idx.clone());
-                }
-            }
-        }
-        None
-    }
-
     fn get(&self, column: &Column) -> SmartReference<Value> {
         self.projections
             .get(column.get_index())
@@ -81,28 +56,29 @@ impl ResultSet for ResultsWithProjections {
     fn revert(&mut self) {
         self.results.revert();
     }
+    fn metadate(&self) -> &Rc<dyn ResultSetMetadata> {
+        &self.metadata
+    }
 }
 
 pub fn make_projection(
     engine: &Engine,
     parent: Box<dyn ResultSet>,
     items: &[SelectItem],
-) -> Result<Box<dyn ResultSet>, CdvSqlError> {
+) -> Result<Box<dyn ResultSet>, CvsSqlError> {
     let mut projections = Vec::new();
+    let mut metadata = SimpleResultSetMetadata::new(parent.metadate().result_name().cloned());
     for item in items {
         let mut items = item.convert(&*parent, engine)?;
+        for i in &items {
+            metadata.add_column(i.name());
+        }
         projections.append(&mut items);
     }
-    let mut names: HashMap<String, Vec<Column>> = HashMap::new();
-    for (idx, p) in projections.iter().enumerate() {
-        names
-            .entry(p.name().name().to_string())
-            .and_modify(|lst| lst.push(Column::from_index(idx)))
-            .or_insert(vec![Column::from_index(idx)]);
-    }
+    let metadata = Rc::new(metadata);
     Ok(Box::new(ResultsWithProjections {
         projections,
-        names,
+        metadata,
         results: parent,
     }))
 }
@@ -111,23 +87,23 @@ trait Convert {
         &self,
         parent: &dyn ResultSet,
         engine: &Engine,
-    ) -> Result<Vec<Box<dyn Projection>>, CdvSqlError>;
+    ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError>;
 }
 impl Convert for SelectItem {
     fn convert(
         &self,
         parent: &dyn ResultSet,
         engine: &Engine,
-    ) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+    ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         match self {
             SelectItem::Wildcard(options) => options.convert(parent, engine),
             SelectItem::UnnamedExpr(exp) => exp.convert(parent, engine),
             SelectItem::ExprWithAlias { expr, alias } => {
                 let data = expr.convert_single(parent, engine)?;
-                let alias = ColumnName::simple(&alias.value);
+                let alias = alias.value.to_string();
                 Ok(vec![Box::new(AliasProjection { data, alias })])
             }
-            _ => Err(CdvSqlError::ToDo(format!("Select {}", self))),
+            _ => Err(CvsSqlError::ToDo(format!("Select {}", self))),
         }
     }
 }
@@ -136,29 +112,31 @@ impl Convert for WildcardAdditionalOptions {
         &self,
         parent: &dyn ResultSet,
         _: &Engine,
-    ) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+    ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         if self.opt_ilike.is_some() {
-            return Err(CdvSqlError::Unsupported("Select * ILIKE".into()));
+            return Err(CvsSqlError::Unsupported("Select * ILIKE".into()));
         }
         if self.opt_exclude.is_some() {
-            return Err(CdvSqlError::Unsupported("Select * EXCLUDE".into()));
+            return Err(CvsSqlError::Unsupported("Select * EXCLUDE".into()));
         }
         if self.opt_except.is_some() {
-            return Err(CdvSqlError::Unsupported("Select * EXCEPT".into()));
+            return Err(CvsSqlError::Unsupported("Select * EXCEPT".into()));
         }
         if self.opt_replace.is_some() {
-            return Err(CdvSqlError::Unsupported("Select * REPLACE".into()));
+            return Err(CvsSqlError::Unsupported("Select * REPLACE".into()));
         }
         if self.opt_rename.is_some() {
-            return Err(CdvSqlError::Unsupported("Select * RENAME".into()));
+            return Err(CvsSqlError::Unsupported("Select * RENAME".into()));
         }
         let mut projections: Vec<Box<dyn Projection>> = Vec::new();
+        let metadata = parent.metadate();
         for column in parent.columns() {
-            let Some(column_name) = parent.column_name(&column) else {
-                return Err(CdvSqlError::Unsupported(
+            let Some(column_name) = metadata.column_name(&column) else {
+                return Err(CvsSqlError::Unsupported(
                     "Select * with unnamed column".into(),
                 ));
             };
+            let column_name = column_name.short_name().to_string();
             projections.push(Box::new(ColumnProjection {
                 column,
                 column_name,
@@ -173,7 +151,7 @@ pub trait SingleConvert {
         &self,
         parent: &dyn ResultSet,
         engine: &Engine,
-    ) -> Result<Box<dyn Projection>, CdvSqlError>;
+    ) -> Result<Box<dyn Projection>, CvsSqlError>;
 }
 
 trait BinaryFunction {
@@ -469,44 +447,49 @@ impl BinaryFunction for XorBinaryFunction {
 
 struct AliasProjection {
     data: Box<dyn Projection>,
-    alias: ColumnName,
+    alias: String,
 }
 impl Projection for AliasProjection {
     fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
         self.data.get(results)
     }
-    fn name(&self) -> SmartReference<'_, ColumnName> {
-        SmartReference::Borrowed(&self.alias)
+    fn name(&self) -> &str {
+        &self.alias
     }
 }
 struct BinaryProjection {
     left: Box<dyn Projection>,
     right: Box<dyn Projection>,
     operator: Box<dyn BinaryFunction>,
+    name: String,
 }
 impl Projection for BinaryProjection {
-    fn name(&self) -> SmartReference<ColumnName> {
-        let name = if self.operator.is_operator() {
-            format!(
-                "{} {} {}",
-                self.left.name(),
-                self.operator.name(),
-                self.right.name()
-            )
-        } else {
-            format!(
-                "{}({}, {})",
-                self.operator.name(),
-                self.left.name(),
-                self.right.name()
-            )
-        };
-        ColumnName::simple(&name).into()
+    fn name(&self) -> &str {
+        &self.name
     }
     fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
         let left = self.left.get(results);
         let right = self.right.get(results);
         self.operator.calculate(left, right)
+    }
+}
+impl BinaryProjection {
+    fn new(
+        left: Box<dyn Projection>,
+        right: Box<dyn Projection>,
+        operator: Box<dyn BinaryFunction>,
+    ) -> Self {
+        let name = if operator.is_operator() {
+            format!("{} {} {}", left.name(), operator.name(), right.name())
+        } else {
+            format!("{}({}, {})", operator.name(), left.name(), right.name())
+        };
+        Self {
+            left,
+            right,
+            operator,
+            name,
+        }
     }
 }
 
@@ -515,7 +498,7 @@ impl<T: SingleConvert> Convert for T {
         &self,
         parent: &dyn ResultSet,
         engine: &Engine,
-    ) -> Result<Vec<Box<dyn Projection>>, CdvSqlError> {
+    ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         let result = self.convert_single(parent, engine)?;
         Ok(vec![result])
     }
@@ -528,9 +511,8 @@ impl Projection for ValueProjection {
     fn get<'a>(&'a self, _: &'a dyn ResultSet) -> SmartReference<'a, Value> {
         SmartReference::Borrowed(&self.value)
     }
-    fn name(&self) -> SmartReference<'_, ColumnName> {
-        let name = ColumnName::simple(&self.name);
-        name.into()
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 
@@ -548,6 +530,7 @@ enum UnaryFunctionType {
 struct UnartyProjection {
     value: Box<dyn Projection>,
     operator: Box<dyn UnaryFunction>,
+    name: String,
 }
 
 impl Projection for UnartyProjection {
@@ -555,19 +538,28 @@ impl Projection for UnartyProjection {
         let value = self.value.get(results);
         self.operator.calculate(value)
     }
-    fn name(&self) -> SmartReference<'_, ColumnName> {
-        let name = match self.operator.function_type() {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+impl UnartyProjection {
+    fn new(value: Box<dyn Projection>, operator: Box<dyn UnaryFunction>) -> Self {
+        let name = match operator.function_type() {
             UnaryFunctionType::Prefix => {
-                format!("{} {}", self.operator.name(), self.value.name(),)
+                format!("{} {}", operator.name(), value.name(),)
             }
             UnaryFunctionType::Postfix => {
-                format!("{} {}", self.value.name(), self.operator.name(),)
+                format!("{} {}", value.name(), operator.name(),)
             }
             UnaryFunctionType::Function => {
-                format!("{}({})", self.operator.name(), self.value.name(),)
+                format!("{}({})", operator.name(), value.name(),)
             }
         };
-        ColumnName::simple(&name).into()
+        Self {
+            value,
+            operator,
+            name,
+        }
     }
 }
 
@@ -701,13 +693,11 @@ struct InProjection {
     value: Box<dyn Projection>,
     list: Vec<Box<dyn Projection>>,
     negated: bool,
+    name: String,
 }
 impl Projection for InProjection {
-    fn name(&self) -> SmartReference<ColumnName> {
-        let list = self.list.iter().map(|t| format!("{}", t.name())).join(", ");
-        let neg = if self.negated { "NOT " } else { "" };
-        let name = format!("{}{} IN ({})", neg, self.value.name(), list);
-        ColumnName::simple(&name).into()
+    fn name(&self) -> &str {
+        &self.name
     }
     fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
         let value = self.value.get(results);
@@ -720,12 +710,25 @@ impl Projection for InProjection {
         Value::Bool(self.negated).into()
     }
 }
+impl InProjection {
+    fn new(value: Box<dyn Projection>, list: Vec<Box<dyn Projection>>, negated: bool) -> Self {
+        let in_list = list.iter().map(|t| t.name().to_string()).join(", ");
+        let neg = if negated { "NOT " } else { "" };
+        let name = format!("{}{} IN ({})", neg, value.name(), in_list);
+        Self {
+            value,
+            list,
+            negated,
+            name,
+        }
+    }
+}
 
 struct InSubquery {
     value: Box<dyn Projection>,
     list: HashSet<Value>,
     negated: bool,
-    name: ColumnName,
+    name: String,
 }
 
 impl Projection for InSubquery {
@@ -734,8 +737,8 @@ impl Projection for InSubquery {
         let contains = self.list.contains(value.deref());
         Value::Bool(self.negated != contains).into()
     }
-    fn name(&self) -> SmartReference<'_, ColumnName> {
-        (&self.name).into()
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 impl InSubquery {
@@ -745,10 +748,10 @@ impl InSubquery {
         negated: &bool,
         engine: &Engine,
         parent: &dyn ResultSet,
-    ) -> Result<Self, CdvSqlError> {
+    ) -> Result<Self, CvsSqlError> {
         let mut results = subquery.extract(engine)?;
-        if results.number_of_columns() != 1 {
-            return Err(CdvSqlError::Unsupported(
+        if results.metadate().number_of_columns() != 1 {
+            return Err(CvsSqlError::Unsupported(
                 "IN (SELECT ...) with more than one column".into(),
             ));
         }
@@ -766,7 +769,7 @@ impl InSubquery {
             negated: *negated,
             list,
             value,
-            name: ColumnName::simple(&name),
+            name,
         })
     }
 }
@@ -776,6 +779,7 @@ struct Between {
     low: Box<dyn Projection>,
     high: Box<dyn Projection>,
     negated: bool,
+    name: String,
 }
 
 impl Projection for Between {
@@ -792,16 +796,8 @@ impl Projection for Between {
             Value::Bool(!self.negated).into()
         }
     }
-    fn name(&self) -> SmartReference<'_, ColumnName> {
-        let neg = if self.negated { "NOT " } else { "" };
-        let name = format!(
-            "{}{} BETWEEN {} AMD {}",
-            neg,
-            self.value.name(),
-            self.low.name(),
-            self.high.name()
-        );
-        ColumnName::simple(&name).into()
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 impl Between {
@@ -812,15 +808,24 @@ impl Between {
         negated: &bool,
         engine: &Engine,
         parent: &dyn ResultSet,
-    ) -> Result<Self, CdvSqlError> {
+    ) -> Result<Self, CvsSqlError> {
         let value = expr.convert_single(parent, engine)?;
         let low = low.convert_single(parent, engine)?;
         let high = high.convert_single(parent, engine)?;
+        let neg = if *negated { "NOT " } else { "" };
+        let name = format!(
+            "{}{} BETWEEN {} AMD {}",
+            neg,
+            value.name(),
+            low.name(),
+            high.name()
+        );
         Ok(Self {
             negated: *negated,
             low,
             high,
             value,
+            name,
         })
     }
 }
@@ -829,6 +834,7 @@ struct RegexProjection {
     value: Box<dyn Projection>,
     regex: Box<dyn Projection>,
     negated: bool,
+    name: String,
 }
 
 impl Projection for RegexProjection {
@@ -845,10 +851,8 @@ impl Projection for RegexProjection {
             Value::Bool(self.negated).into()
         }
     }
-    fn name(&self) -> SmartReference<'_, ColumnName> {
-        let neg = if self.negated { "NOT " } else { "" };
-        let name = format!("{}{} REGEXP {}", neg, self.value.name(), self.regex.name(),);
-        ColumnName::simple(&name).into()
+    fn name(&self) -> &str {
+        &self.name
     }
 }
 impl RegexProjection {
@@ -858,13 +862,16 @@ impl RegexProjection {
         negated: &bool,
         engine: &Engine,
         parent: &dyn ResultSet,
-    ) -> Result<Self, CdvSqlError> {
+    ) -> Result<Self, CvsSqlError> {
         let value = expr.convert_single(parent, engine)?;
         let regex = regex.convert_single(parent, engine)?;
+        let neg = if *negated { "NOT " } else { "" };
+        let name = format!("{}{} REGEXP {}", neg, value.name(), regex.name(),);
         Ok(Self {
             negated: *negated,
             regex,
             value,
+            name,
         })
     }
 }
@@ -873,25 +880,16 @@ impl SingleConvert for Expr {
         &self,
         parent: &dyn ResultSet,
         engine: &Engine,
-    ) -> Result<Box<dyn Projection>, CdvSqlError> {
+    ) -> Result<Box<dyn Projection>, CvsSqlError> {
         match self {
             Expr::Identifier(ident) => {
-                let name = ColumnName::simple(&ident.value);
+                let name: Name = ident.value.to_string().into();
                 name.convert_single(parent, engine)
             }
             Expr::CompoundIdentifier(idents) => {
-                let mut root = ResultName::root();
-                let mut names = idents.iter().peekable();
-                while let Some(name) = names.next() {
-                    if names.peek().is_none() {
-                        let name = ColumnName::new(&Rc::new(root), &name.value);
-
-                        return name.convert_single(parent, engine);
-                    } else {
-                        root = root.append(&name.value);
-                    }
-                }
-                Err(CdvSqlError::NoSelect)
+                let names: Vec<_> = idents.iter().map(|i| i.value.to_string()).collect();
+                let name: Name = names.into();
+                name.convert_single(parent, engine)
             }
             Expr::BinaryOp { left, op, right } => {
                 let left = left.convert_single(parent, engine)?;
@@ -913,14 +911,10 @@ impl SingleConvert for Expr {
                     BinaryOperator::Or => Box::new(OrBinaryFunction {}),
                     BinaryOperator::Xor => Box::new(XorBinaryFunction {}),
                     _ => {
-                        return Err(CdvSqlError::Unsupported(format!("Operator: {}", op)));
+                        return Err(CvsSqlError::Unsupported(format!("Operator: {}", op)));
                     }
                 };
-                Ok(Box::new(BinaryProjection {
-                    left,
-                    right,
-                    operator,
-                }))
+                Ok(Box::new(BinaryProjection::new(left, right, operator)))
             }
             Expr::Value(val) => {
                 let name = self.to_string();
@@ -937,38 +931,38 @@ impl SingleConvert for Expr {
                         let value = s.as_str().into();
                         Ok(Box::new(ValueProjection { value, name }))
                     }
-                    _ => Err(CdvSqlError::ToDo(format!("Select literal value {}", self))),
+                    _ => Err(CvsSqlError::ToDo(format!("Select literal value {}", self))),
                 }
             }
             Expr::IsFalse(val) => {
                 let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsFalse {});
-                Ok(Box::new(UnartyProjection { value, operator }))
+                Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsNotFalse(val) => {
                 let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsNotFalse {});
-                Ok(Box::new(UnartyProjection { value, operator }))
+                Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsTrue(val) => {
                 let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsTrue {});
-                Ok(Box::new(UnartyProjection { value, operator }))
+                Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsNotTrue(val) => {
                 let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsNotTrue {});
-                Ok(Box::new(UnartyProjection { value, operator }))
+                Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsNull(val) => {
                 let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsNull {});
-                Ok(Box::new(UnartyProjection { value, operator }))
+                Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsNotNull(val) => {
                 let value = val.convert_single(parent, engine)?;
                 let operator = Box::new(IsNotNull {});
-                Ok(Box::new(UnartyProjection { value, operator }))
+                Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::InList {
                 expr,
@@ -981,11 +975,7 @@ impl SingleConvert for Expr {
                     items.push(item.convert_single(parent, engine)?);
                 }
 
-                Ok(Box::new(InProjection {
-                    value,
-                    list: items,
-                    negated: *negated,
-                }))
+                Ok(Box::new(InProjection::new(value, items, *negated)))
             }
             Expr::InSubquery {
                 expr,
@@ -1027,10 +1017,10 @@ impl SingleConvert for Expr {
                     UnaryOperator::Minus => Box::new(Negative {}),
                     UnaryOperator::Plus => Box::new(PlusUnary {}),
                     UnaryOperator::Not => Box::new(Not {}),
-                    _ => return Err(CdvSqlError::Unsupported(format!("Operator: {}", op))),
+                    _ => return Err(CvsSqlError::Unsupported(format!("Operator: {}", op))),
                 };
                 let value = expr.convert_single(parent, engine)?;
-                Ok(Box::new(UnartyProjection { value, operator }))
+                Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::Cast {
                 kind: _,
@@ -1039,7 +1029,7 @@ impl SingleConvert for Expr {
                 format,
             } => {
                 if format.is_some() {
-                    return Err(CdvSqlError::Unsupported("CAST with format".to_string()));
+                    return Err(CvsSqlError::Unsupported("CAST with format".to_string()));
                 }
                 let value = expr.convert_single(parent, engine)?;
                 create_cast(data_type, value)
@@ -1053,37 +1043,34 @@ impl SingleConvert for Expr {
                 styles: _,
             } => {
                 if charset.is_some() {
-                    return Err(CdvSqlError::Unsupported("CONVERT with charset".to_string()));
+                    return Err(CvsSqlError::Unsupported("CONVERT with charset".to_string()));
                 };
                 let Some(data_type) = data_type else {
-                    return Err(CdvSqlError::Unsupported("CONVERT with charset".to_string()));
+                    return Err(CvsSqlError::Unsupported("CONVERT with charset".to_string()));
                 };
                 let value = expr.convert_single(parent, engine)?;
                 create_cast(data_type, value)
             }
 
-            _ => Err(CdvSqlError::ToDo(format!(
+            _ => Err(CvsSqlError::ToDo(format!(
                 "Select expression like {}",
                 self
             ))),
         }
     }
 }
-impl SingleConvert for ColumnName {
+
+impl SingleConvert for Name {
     fn convert_single(
         &self,
         parent: &dyn ResultSet,
         _: &Engine,
-    ) -> Result<Box<dyn Projection>, CdvSqlError> {
-        let Some(column) = parent.column_index(self) else {
-            return Err(CdvSqlError::NoSuchColumn(self.name().into()));
-        };
-        let Some(column_name) = parent.column_name(&column) else {
-            return Err(CdvSqlError::NoSuchColumn(self.name().into()));
-        };
+    ) -> Result<Box<dyn Projection>, CvsSqlError> {
+        let metadata = parent.metadate();
+        let column = metadata.column_index(self)?;
         let projection = Box::new(ColumnProjection {
             column: column.clone(),
-            column_name,
+            column_name: self.short_name().to_string(),
         });
         Ok(projection)
     }
