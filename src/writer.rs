@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::results::ResultSet;
 
 pub trait Writer {
-    fn write(&mut self, results: &mut dyn ResultSet) -> Result<(), WriterError>;
+    fn write(&mut self, results: &ResultSet) -> Result<(), WriterError>;
 }
 
 struct CsvWriter<W: Write> {
@@ -14,17 +14,17 @@ struct CsvWriter<W: Write> {
 }
 
 impl<W: Write> Writer for CsvWriter<W> {
-    fn write(&mut self, results: &mut dyn ResultSet) -> Result<(), WriterError> {
+    fn write(&mut self, results: &ResultSet) -> Result<(), WriterError> {
         let headers: Vec<_> = results
             .columns()
-            .map(|column| results.metadate().column_name(&column))
+            .map(|column| results.metadata.column_name(&column))
             .map(|name| name.map(|c| c.short_name()).unwrap_or_default())
             .collect();
         self.writer.write_record(&headers)?;
-        while results.next_if_possible() {
+        for row in results.data.iter() {
             let line: Vec<_> = results
                 .columns()
-                .map(|column| results.get(&column))
+                .map(|column| row.get(&column))
                 .map(|f| f.to_string())
                 .collect();
             self.writer.write_record(line)?
@@ -50,82 +50,33 @@ pub enum WriterError {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
-
     use bigdecimal::BigDecimal;
     use bigdecimal::FromPrimitive;
 
     use super::*;
-    use crate::results::Column;
-    use crate::results::ColumnIndexError;
-    use crate::results::Name;
-    use crate::results::ResultSetMetadata;
-    use crate::util::SmartReference;
+    use crate::result_set_metadata::SimpleResultSetMetadata;
+    use crate::results_data::DataRow;
+    use crate::results_data::ResultsData;
     use crate::value::Value;
 
     #[test]
     fn write_writes_csv_output() -> Result<(), WriterError> {
-        struct Results {
-            values: Vec<Vec<Value>>,
-            index: usize,
-            metadata: Rc<dyn ResultSetMetadata>,
+        let mut rows = Vec::new();
+        let mut metadata = SimpleResultSetMetadata::new(None);
+        for r in 0..3 {
+            let mut row = Vec::new();
+            for c in 0..5 {
+                if r == 0 {
+                    metadata.add_column(format!("col {}", c).as_str());
+                }
+                row.push(Value::Number(BigDecimal::from_i32(c * 12 + r).unwrap()));
+            }
+            let row = DataRow::new(row);
+            rows.push(row);
         }
-        #[derive(Default)]
-        struct Metadata {
-            names: Vec<Name>,
-        }
-        impl ResultSetMetadata for Metadata {
-            fn column_index(
-                &self,
-                name: &Name,
-            ) -> Result<SmartReference<Column>, ColumnIndexError> {
-                Err(ColumnIndexError::NoSuchColumn(name.full_name()))
-            }
-            fn number_of_columns(&self) -> usize {
-                self.names.len()
-            }
-            fn column_name(&self, column: &Column) -> Option<&Name> {
-                self.names.get(column.get_index())
-            }
-            fn result_name(&self) -> Option<&Name> {
-                None
-            }
-        }
-        impl ResultSet for Results {
-            fn metadate(&self) -> &Rc<dyn ResultSetMetadata> {
-                &self.metadata
-            }
-            fn get(&self, column: &Column) -> SmartReference<Value> {
-                self.values
-                    .get(column.get_index())
-                    .and_then(|v| v.get(self.index - 1))
-                    .unwrap_or(&Value::Empty)
-                    .into()
-            }
-            fn next_if_possible(&mut self) -> bool {
-                self.index += 1;
-                self.values.len() >= self.index
-            }
-            fn revert(&mut self) {
-                self.index = 0;
-            }
-        }
-        let mut values = Vec::new();
-        let mut metadata = Metadata::default();
-        for col in 0..5 {
-            metadata.names.push(format!("col {}", col).into());
-            let mut data = Vec::new();
-            for row in 0..3 {
-                data.push(Value::Number(BigDecimal::from_i32(col * 12 + row).unwrap()));
-            }
-            values.push(data);
-        }
-        let metadata = Rc::new(metadata);
-        let mut results = Results {
-            metadata,
-            values,
-            index: 0,
-        };
+        let data = ResultsData::new(rows);
+        let metadata = metadata.build();
+        let mut results = ResultSet { metadata, data };
         let mut write = Vec::new();
 
         {

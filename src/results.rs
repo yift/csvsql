@@ -1,8 +1,12 @@
-use std::{ops::Deref, rc::Rc};
+use std::ops::Deref;
 
 use thiserror::Error;
 
-use crate::{util::SmartReference, value::Value};
+use crate::{
+    result_set_metadata::Metadata,
+    results_data::{DataRow, ResultsData},
+    value::Value,
+};
 
 #[derive(Clone, Debug)]
 pub struct Column {
@@ -91,24 +95,18 @@ pub enum ColumnIndexError {
     AmbiguousColumnName(String),
 }
 
-pub trait ResultSetMetadata {
-    fn number_of_columns(&self) -> usize;
-    fn column_name(&self, column: &Column) -> Option<&Name>;
-    fn result_name(&self) -> Option<&Name>;
-    fn column_index(&self, name: &Name) -> Result<SmartReference<Column>, ColumnIndexError>;
+pub struct ResultSet {
+    pub metadata: Metadata,
+    pub data: ResultsData,
 }
-pub trait ResultSet {
-    fn metadate(&self) -> &Rc<dyn ResultSetMetadata>;
-    fn columns(&self) -> Box<dyn Iterator<Item = Column>> {
-        Box::new((0..self.metadate().number_of_columns()).map(|column| Column { column }))
+impl ResultSet {
+    pub fn columns(&self) -> Box<dyn Iterator<Item = Column>> {
+        Box::new((0..self.metadata.number_of_columns()).map(|column| Column { column }))
     }
-    fn next_if_possible(&mut self) -> bool;
-    fn revert(&mut self);
-    fn get<'a>(&'a self, column: &Column) -> SmartReference<'a, Value>;
-    fn value(&self, name: &Name) -> SmartReference<Value> {
-        match self.metadate().column_index(name) {
-            Ok(column) => self.get(column.deref()),
-            Err(_) => Value::Empty.into(),
+    pub fn value<'a>(&self, name: &Name, row: &'a DataRow) -> &'a Value {
+        match self.metadata.column_index(name) {
+            Ok(column) => row.get(column.deref()),
+            Err(_) => &Value::Empty,
         }
     }
 }

@@ -10,7 +10,7 @@ use sqlparser::ast::DataType;
 
 use crate::error::CvsSqlError;
 use crate::projections::Projection;
-use crate::results::ResultSet;
+use crate::results_data::DataRow;
 use crate::util::SmartReference;
 use crate::value::Value;
 struct Cast {
@@ -19,8 +19,8 @@ struct Cast {
     name: String,
 }
 impl Projection for Cast {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
-        let value = self.to_cast.get(results);
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        let value = self.to_cast.get(row);
         self.data_type.convert(value)
     }
     fn name(&self) -> &str {

@@ -7,8 +7,8 @@ use crate::cast::create_cast;
 use crate::engine::Engine;
 use crate::error::CvsSqlError;
 use crate::extractor::Extractor;
-use crate::results::ResultSetMetadata;
-use crate::simple_result_set_metadata::SimpleResultSetMetadata;
+use crate::result_set_metadata::SimpleResultSetMetadata;
+use crate::results_data::{DataRow, ResultsData};
 use crate::util::SmartReference;
 use crate::{
     results::{Column, Name, ResultSet},
@@ -18,10 +18,9 @@ use itertools::Itertools;
 use sqlparser::ast::Value as AstValue;
 use std::collections::HashSet;
 use std::ops::Deref;
-use std::rc::Rc;
 
-pub trait Projection {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value>;
+pub(crate) trait Projection {
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value>;
     fn name(&self) -> &str;
 }
 struct ColumnProjection {
@@ -29,70 +28,53 @@ struct ColumnProjection {
     column_name: String,
 }
 impl Projection for ColumnProjection {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
-        results.get(&self.column)
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        row.get(&self.column).into()
     }
     fn name(&self) -> &str {
         &self.column_name
     }
 }
 
-struct ResultsWithProjections {
-    metadata: Rc<dyn ResultSetMetadata>,
-    projections: Vec<Box<dyn Projection>>,
-    results: Box<dyn ResultSet>,
-}
-
-impl ResultSet for ResultsWithProjections {
-    fn get(&self, column: &Column) -> SmartReference<Value> {
-        self.projections
-            .get(column.get_index())
-            .map(|p| p.get(&*self.results))
-            .unwrap_or(Value::Empty.into())
-    }
-    fn next_if_possible(&mut self) -> bool {
-        self.results.next_if_possible()
-    }
-    fn revert(&mut self) {
-        self.results.revert();
-    }
-    fn metadate(&self) -> &Rc<dyn ResultSetMetadata> {
-        &self.metadata
-    }
-}
-
 pub fn make_projection(
     engine: &Engine,
-    parent: Box<dyn ResultSet>,
+    parent: ResultSet,
     items: &[SelectItem],
-) -> Result<Box<dyn ResultSet>, CvsSqlError> {
+) -> Result<ResultSet, CvsSqlError> {
     let mut projections = Vec::new();
-    let mut metadata = SimpleResultSetMetadata::new(parent.metadate().result_name().cloned());
+    let mut metadata = SimpleResultSetMetadata::new(parent.metadata.result_name().cloned());
     for item in items {
-        let mut items = item.convert(&*parent, engine)?;
+        let mut items = item.convert(&parent, engine)?;
         for i in &items {
             metadata.add_column(i.name());
         }
         projections.append(&mut items);
     }
-    let metadata = Rc::new(metadata);
-    Ok(Box::new(ResultsWithProjections {
-        projections,
-        metadata,
-        results: parent,
-    }))
+    let metadata = metadata.build();
+    let mut data = Vec::new();
+    for parent_row in parent.data.iter() {
+        let mut row = Vec::new();
+        for item in &projections {
+            let data = item.get(parent_row);
+            row.push(data.clone());
+        }
+        let row = DataRow::new(row);
+        data.push(row);
+    }
+    let data = ResultsData::new(data);
+    Ok(ResultSet { metadata, data })
 }
 trait Convert {
     fn convert(
         &self,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
         engine: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError>;
 }
 impl Convert for SelectItem {
     fn convert(
         &self,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
         engine: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         match self {
@@ -110,7 +92,7 @@ impl Convert for SelectItem {
 impl Convert for WildcardAdditionalOptions {
     fn convert(
         &self,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
         _: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         if self.opt_ilike.is_some() {
@@ -129,7 +111,7 @@ impl Convert for WildcardAdditionalOptions {
             return Err(CvsSqlError::Unsupported("Select * RENAME".into()));
         }
         let mut projections: Vec<Box<dyn Projection>> = Vec::new();
-        let metadata = parent.metadate();
+        let metadata = &parent.metadata;
         for column in parent.columns() {
             let Some(column_name) = metadata.column_name(&column) else {
                 return Err(CvsSqlError::Unsupported(
@@ -149,7 +131,7 @@ impl Convert for WildcardAdditionalOptions {
 pub trait SingleConvert {
     fn convert_single(
         &self,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
         engine: &Engine,
     ) -> Result<Box<dyn Projection>, CvsSqlError>;
 }
@@ -450,8 +432,8 @@ struct AliasProjection {
     alias: String,
 }
 impl Projection for AliasProjection {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
-        self.data.get(results)
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        self.data.get(row)
     }
     fn name(&self) -> &str {
         &self.alias
@@ -467,9 +449,9 @@ impl Projection for BinaryProjection {
     fn name(&self) -> &str {
         &self.name
     }
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
-        let left = self.left.get(results);
-        let right = self.right.get(results);
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        let left = self.left.get(row);
+        let right = self.right.get(row);
         self.operator.calculate(left, right)
     }
 }
@@ -496,7 +478,7 @@ impl BinaryProjection {
 impl<T: SingleConvert> Convert for T {
     fn convert(
         &self,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
         engine: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         let result = self.convert_single(parent, engine)?;
@@ -508,7 +490,7 @@ struct ValueProjection {
     name: String,
 }
 impl Projection for ValueProjection {
-    fn get<'a>(&'a self, _: &'a dyn ResultSet) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, _: &DataRow) -> SmartReference<'a, Value> {
         SmartReference::Borrowed(&self.value)
     }
     fn name(&self) -> &str {
@@ -534,8 +516,8 @@ struct UnartyProjection {
 }
 
 impl Projection for UnartyProjection {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
-        let value = self.value.get(results);
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        let value = self.value.get(row);
         self.operator.calculate(value)
     }
     fn name(&self) -> &str {
@@ -699,10 +681,10 @@ impl Projection for InProjection {
     fn name(&self) -> &str {
         &self.name
     }
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
-        let value = self.value.get(results);
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        let value = self.value.get(row);
         for item in &self.list {
-            let item = item.get(results);
+            let item = item.get(row);
             if item == value {
                 return Value::Bool(!self.negated).into();
             }
@@ -732,8 +714,8 @@ struct InSubquery {
 }
 
 impl Projection for InSubquery {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
-        let value = self.value.get(results);
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        let value = self.value.get(row);
         let contains = self.list.contains(value.deref());
         Value::Bool(self.negated != contains).into()
     }
@@ -747,10 +729,10 @@ impl InSubquery {
         subquery: &Query,
         negated: &bool,
         engine: &Engine,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
     ) -> Result<Self, CvsSqlError> {
-        let mut results = subquery.extract(engine)?;
-        if results.metadate().number_of_columns() != 1 {
+        let results = subquery.extract(engine)?;
+        if results.metadata.number_of_columns() != 1 {
             return Err(CvsSqlError::Unsupported(
                 "IN (SELECT ...) with more than one column".into(),
             ));
@@ -760,9 +742,8 @@ impl InSubquery {
         let value = expr.convert_single(parent, engine)?;
         let mut list = HashSet::new();
         let col = Column::from_index(0);
-        while results.next_if_possible() {
-            let value = results.get(&col);
-            let value = value.extract();
+        for row in results.data.iter() {
+            let value = row.get(&col).clone();
             list.insert(value);
         }
         Ok(Self {
@@ -783,13 +764,13 @@ struct Between {
 }
 
 impl Projection for Between {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
-        let value = self.value.get(results);
-        let low = self.low.get(results);
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        let value = self.value.get(row);
+        let low = self.low.get(row);
         if *value < *low {
             return Value::Bool(self.negated).into();
         }
-        let high = self.high.get(results);
+        let high = self.high.get(row);
         if *value > *high {
             Value::Bool(self.negated).into()
         } else {
@@ -807,7 +788,7 @@ impl Between {
         high: &Expr,
         negated: &bool,
         engine: &Engine,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
     ) -> Result<Self, CvsSqlError> {
         let value = expr.convert_single(parent, engine)?;
         let low = low.convert_single(parent, engine)?;
@@ -838,9 +819,9 @@ struct RegexProjection {
 }
 
 impl Projection for RegexProjection {
-    fn get<'a>(&'a self, results: &'a dyn ResultSet) -> SmartReference<'a, Value> {
-        let value = self.value.get(results);
-        let regex = self.regex.get(results);
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        let value = self.value.get(row);
+        let regex = self.regex.get(row);
         let Ok(regex) = Regex::new(&regex.to_string()) else {
             return Value::Bool(self.negated).into();
         };
@@ -861,7 +842,7 @@ impl RegexProjection {
         regex: &Expr,
         negated: &bool,
         engine: &Engine,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
     ) -> Result<Self, CvsSqlError> {
         let value = expr.convert_single(parent, engine)?;
         let regex = regex.convert_single(parent, engine)?;
@@ -878,7 +859,7 @@ impl RegexProjection {
 impl SingleConvert for Expr {
     fn convert_single(
         &self,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
         engine: &Engine,
     ) -> Result<Box<dyn Projection>, CvsSqlError> {
         match self {
@@ -1063,10 +1044,10 @@ impl SingleConvert for Expr {
 impl SingleConvert for Name {
     fn convert_single(
         &self,
-        parent: &dyn ResultSet,
+        parent: &ResultSet,
         _: &Engine,
     ) -> Result<Box<dyn Projection>, CvsSqlError> {
-        let metadata = parent.metadate();
+        let metadata = &parent.metadata;
         let column = metadata.column_index(self)?;
         let projection = Box::new(ColumnProjection {
             column: column.clone(),

@@ -8,11 +8,11 @@ use crate::named_results::alias_results;
 use crate::projections::make_projection;
 use crate::{engine::Engine, results::ResultSet};
 pub trait Extractor {
-    fn extract(&self, engine: &Engine) -> Result<Box<dyn ResultSet>, CvsSqlError>;
+    fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError>;
 }
 
 impl Extractor for Statement {
-    fn extract(&self, engine: &Engine) -> Result<Box<dyn ResultSet>, CvsSqlError> {
+    fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
         match self {
             Statement::Query(query) => query.extract(engine),
             _ => Err(CvsSqlError::Unsupported(self.to_string())),
@@ -21,7 +21,7 @@ impl Extractor for Statement {
 }
 
 impl Extractor for Query {
-    fn extract(&self, engine: &Engine) -> Result<Box<dyn ResultSet>, CvsSqlError> {
+    fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
         if self.fetch.is_some() {
             return Err(CvsSqlError::Unsupported("SELECT ... FETCH".to_string()));
         }
@@ -76,7 +76,7 @@ impl Extractor for Query {
 }
 
 impl Extractor for Select {
-    fn extract(&self, engine: &Engine) -> Result<Box<dyn ResultSet>, CvsSqlError> {
+    fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
         if self.distinct.is_some() {
             return Err(CvsSqlError::Unsupported("SELECT DISTINCT".to_string()));
         }
@@ -172,7 +172,7 @@ impl Extractor for Select {
 }
 
 impl Extractor for TableFactor {
-    fn extract(&self, engine: &Engine) -> Result<Box<dyn ResultSet>, CvsSqlError> {
+    fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
         match self {
             TableFactor::Table {
                 name,

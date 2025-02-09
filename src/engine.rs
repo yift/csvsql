@@ -25,7 +25,7 @@ impl TryFrom<&Args> for Engine {
 }
 
 impl Engine {
-    pub fn execute_commands(&self, sql: &str) -> Result<Vec<Box<dyn ResultSet>>, CvsSqlError> {
+    pub fn execute_commands(&self, sql: &str) -> Result<Vec<ResultSet>, CvsSqlError> {
         let dialect = FilesDialect {};
         let mut results = Vec::new();
         for statement in Parser::parse_sql(&dialect, sql)? {
