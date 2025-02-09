@@ -52,6 +52,9 @@ impl Value {
             _ => None,
         }
     }
+    pub(crate) fn is_empty(&self) -> bool {
+        matches!(self, Value::Empty)
+    }
 }
 impl From<&str> for Value {
     fn from(value: &str) -> Self {

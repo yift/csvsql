@@ -1,5 +1,6 @@
 use core::panic;
 use std::{
+    cmp::Ordering,
     collections::{HashMap, HashSet},
     fs,
 };
@@ -1339,6 +1340,295 @@ fn test_in_list() -> Result<(), CvsSqlError> {
         assert_eq!(not_in_list, &Value::Bool(!expected));
     }
     assert_eq!(result_iter.next().is_some(), false);
+
+    Ok(())
+}
+
+#[test]
+fn test_select_with_order_by() -> Result<(), CvsSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let mut results =
+        engine.execute_commands("SELECT id FROM tests.data.sales ORDER BY \"sale made\";")?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.iter_mut().next().unwrap();
+
+    assert_eq!(results.metadata.number_of_columns(), 1);
+
+    assert_eq!(
+        results
+            .metadata
+            .column_name(&Column::from_index(0))
+            .unwrap()
+            .short_name(),
+        "id"
+    );
+
+    let mut expected_rows = Vec::new();
+    for data in get_sales() {
+        expected_rows.push((data.id, data.sale_made));
+    }
+    expected_rows.sort_by(|left, right| left.1.cmp(&right.1));
+
+    for (index, row) in results.data.iter().enumerate() {
+        let id = results.value(&"id".into(), row).to_string();
+        let expected_id = expected_rows.get(index).unwrap().0.clone();
+        assert_eq!(id, expected_id);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_select_with_order_by_desc() -> Result<(), CvsSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let mut results =
+        engine.execute_commands("SELECT id FROM tests.data.sales ORDER BY \"sale made\" DESC;")?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.iter_mut().next().unwrap();
+
+    assert_eq!(results.metadata.number_of_columns(), 1);
+
+    assert_eq!(
+        results
+            .metadata
+            .column_name(&Column::from_index(0))
+            .unwrap()
+            .short_name(),
+        "id"
+    );
+
+    let mut expected_rows = Vec::new();
+    for data in get_sales() {
+        expected_rows.push((data.id, data.sale_made));
+    }
+    expected_rows.sort_by(|left, right| right.1.cmp(&left.1));
+
+    for (index, row) in results.data.iter().enumerate() {
+        let id = results.value(&"id".into(), row).to_string();
+        let expected_id = expected_rows.get(index).unwrap().0.clone();
+        assert_eq!(id, expected_id);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_select_with_order_by_two_rows() -> Result<(), CvsSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let mut results = engine.execute_commands(
+        "SELECT email FROM tests.data.customers ORDER BY active, \"last modified\";",
+    )?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.iter_mut().next().unwrap();
+
+    assert_eq!(results.metadata.number_of_columns(), 1);
+
+    assert_eq!(
+        results
+            .metadata
+            .column_name(&Column::from_index(0))
+            .unwrap()
+            .short_name(),
+        "email"
+    );
+
+    let mut expected_rows = Vec::new();
+    for data in get_customers() {
+        expected_rows.push((data.email, data.active, data.last_modified));
+    }
+    expected_rows.sort_by(|left, right| {
+        if left.1 == right.1 {
+            left.2.cmp(&right.2)
+        } else {
+            left.1.cmp(&right.1)
+        }
+    });
+
+    for (index, row) in results.data.iter().enumerate() {
+        let email = results.value(&"email".into(), row).to_string();
+        let expected_email = expected_rows.get(index).unwrap().0.clone();
+        assert_eq!(email, expected_email);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_select_with_order_by_nulls_last() -> Result<(), CvsSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let mut results =
+        engine.execute_commands("SELECT id FROM tests.data.sales ORDER BY \"delivered at\";")?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.iter_mut().next().unwrap();
+
+    assert_eq!(results.metadata.number_of_columns(), 1);
+
+    assert_eq!(
+        results
+            .metadata
+            .column_name(&Column::from_index(0))
+            .unwrap()
+            .short_name(),
+        "id"
+    );
+
+    let mut expected_rows = Vec::new();
+    for data in get_sales() {
+        expected_rows.push((data.id, data.delivered_at));
+    }
+    expected_rows.sort_by(|left, right| {
+        if left.1.is_none() {
+            if right.1.is_none() {
+                Ordering::Equal
+            } else {
+                Ordering::Greater
+            }
+        } else if right.1.is_none() {
+            Ordering::Less
+        } else {
+            left.1.cmp(&right.1)
+        }
+    });
+
+    for (index, row) in results.data.iter().enumerate() {
+        let id = results.value(&"id".into(), row).to_string();
+        let expected_id = expected_rows.get(index).unwrap().0.clone();
+        assert_eq!(id, expected_id);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_select_with_order_by_nulls_last_desc() -> Result<(), CvsSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let mut results = engine
+        .execute_commands("SELECT id FROM tests.data.sales ORDER BY \"delivered at\" DESC;")?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.iter_mut().next().unwrap();
+
+    assert_eq!(results.metadata.number_of_columns(), 1);
+
+    assert_eq!(
+        results
+            .metadata
+            .column_name(&Column::from_index(0))
+            .unwrap()
+            .short_name(),
+        "id"
+    );
+
+    let mut expected_rows = Vec::new();
+    for data in get_sales() {
+        expected_rows.push((data.id, data.delivered_at));
+    }
+    expected_rows.sort_by(|left, right| {
+        if left.1.is_none() {
+            if right.1.is_none() {
+                Ordering::Equal
+            } else {
+                Ordering::Less
+            }
+        } else if right.1.is_none() {
+            Ordering::Greater
+        } else {
+            left.1.cmp(&right.1).reverse()
+        }
+    });
+
+    for (index, row) in results.data.iter().enumerate() {
+        let id = results.value(&"id".into(), row).to_string();
+        let expected_id = expected_rows.get(index).unwrap().0.clone();
+        assert_eq!(id, expected_id);
+    }
+
+    Ok(())
+}
+#[test]
+fn test_select_with_order_by_nulls_first() -> Result<(), CvsSqlError> {
+    let args = Args {
+        command: None,
+        home: None,
+        first_line_as_name: true,
+    };
+    let engine = Engine::try_from(&args)?;
+
+    let mut results = engine.execute_commands(
+        "SELECT id FROM tests.data.sales ORDER BY \"delivered at\" NULLS FIRST;",
+    )?;
+
+    assert_eq!(results.len(), 1);
+    let results = results.iter_mut().next().unwrap();
+
+    assert_eq!(results.metadata.number_of_columns(), 1);
+
+    assert_eq!(
+        results
+            .metadata
+            .column_name(&Column::from_index(0))
+            .unwrap()
+            .short_name(),
+        "id"
+    );
+
+    let mut expected_rows = Vec::new();
+    for data in get_sales() {
+        expected_rows.push((data.id, data.delivered_at));
+    }
+    expected_rows.sort_by(|left, right| {
+        if left.1.is_none() {
+            if right.1.is_none() {
+                Ordering::Equal
+            } else {
+                Ordering::Less
+            }
+        } else if right.1.is_none() {
+            Ordering::Greater
+        } else {
+            left.1.cmp(&right.1)
+        }
+    });
+
+    for (index, row) in results.data.iter().enumerate() {
+        let id = results.value(&"id".into(), row).to_string();
+        let expected_id = expected_rows.get(index).unwrap().0.clone();
+        assert_eq!(id, expected_id);
+    }
 
     Ok(())
 }

@@ -1,10 +1,11 @@
-use sqlparser::ast::{GroupByExpr, Query, Select, SetExpr, Statement, TableFactor};
+use sqlparser::ast::{GroupByExpr, OrderBy, Query, Select, SetExpr, Statement, TableFactor};
 
 use crate::cartesian_product_results::join;
 use crate::error::CvsSqlError;
 use crate::file_results::read_file;
 use crate::filter_results::make_filter;
 use crate::named_results::alias_results;
+use crate::order_by_results::order_by;
 use crate::projections::make_projection;
 use crate::{engine::Engine, results::ResultSet};
 pub trait Extractor {
@@ -46,9 +47,6 @@ impl Extractor for Query {
             return Err(CvsSqlError::ToDo("SELECT ... FORMAT".to_string()));
         }
 
-        if self.order_by.is_some() {
-            return Err(CvsSqlError::ToDo("SELECT ... ORDER BY".to_string()));
-        }
         if self.limit.is_some() {
             return Err(CvsSqlError::ToDo("SELECT ... LIMIT".to_string()));
         }
@@ -57,7 +55,7 @@ impl Extractor for Query {
         }
 
         match &*self.body {
-            SetExpr::Select(select) => select.extract(engine),
+            SetExpr::Select(select) => extract(select, &self.order_by, engine),
             SetExpr::Query(_) => Err(CvsSqlError::ToDo("SELECT (SELECT ...)".to_string())),
             SetExpr::Values(_) => Err(CvsSqlError::Unsupported("SELECT ... VALUES".to_string())),
             SetExpr::Insert(_) => Err(CvsSqlError::Unsupported("SELECT ... INSERT".to_string())),
@@ -74,101 +72,103 @@ impl Extractor for Query {
         }
     }
 }
-
-impl Extractor for Select {
-    fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
-        if self.distinct.is_some() {
-            return Err(CvsSqlError::Unsupported("SELECT DISTINCT".to_string()));
-        }
-        if self.top.is_some() {
-            return Err(CvsSqlError::Unsupported("SELECT TOP".to_string()));
-        }
-        if self.top_before_distinct {
-            return Err(CvsSqlError::Unsupported("SELECT ALL".to_string()));
-        }
-        if self.into.is_some() {
-            return Err(CvsSqlError::Unsupported("SELECT INTO".to_string()));
-        }
-        if !self.lateral_views.is_empty() {
-            return Err(CvsSqlError::Unsupported("SELECT LATERAL VIEW".to_string()));
-        }
-        if self.prewhere.is_some() {
-            return Err(CvsSqlError::Unsupported("SELECT ... PREWHERE".to_string()));
-        }
-        if !self.cluster_by.is_empty() {
-            return Err(CvsSqlError::Unsupported(
-                "SELECT ... CLUSTER BY".to_string(),
-            ));
-        }
-        if !self.distribute_by.is_empty() {
-            return Err(CvsSqlError::Unsupported(
-                "SELECT ... DISTRIBUTE BY".to_string(),
-            ));
-        }
-        if !self.sort_by.is_empty() {
-            return Err(CvsSqlError::Unsupported("SELECT ... SORT BY".to_string()));
-        }
-        if !self.named_window.is_empty() || self.window_before_qualify {
-            return Err(CvsSqlError::Unsupported("SELECT ... WINDOW ".to_string()));
-        }
-        if self.qualify.is_some() {
-            return Err(CvsSqlError::Unsupported("SELECT ... QUALIFY".to_string()));
-        }
-        if self.value_table_mode.is_some() {
-            return Err(CvsSqlError::Unsupported(
-                "SELECT AS VALUE/STRUCT".to_string(),
-            ));
-        }
-        if self.connect_by.is_some() {
-            return Err(CvsSqlError::Unsupported(
-                "SELECT ... CONNECT BY".to_string(),
-            ));
-        }
-
-        if self.having.is_some() {
-            return Err(CvsSqlError::ToDo("SELECT ... HAVING".to_string()));
-        }
-        match &self.group_by {
-            GroupByExpr::All(_) => {
-                return Err(CvsSqlError::Unsupported(
-                    "SELECT ... GROUP BY ALL".to_string(),
-                ))
-            }
-            GroupByExpr::Expressions(exp, mods) => {
-                if !exp.is_empty() {
-                    return Err(CvsSqlError::ToDo("SELECT ... GROUP BY".to_string()));
-                }
-                if !mods.is_empty() {
-                    return Err(CvsSqlError::ToDo("SELECT ... GROUP BY".to_string()));
-                }
-            }
-        }
-
-        if self.from.is_empty() {
-            return Err(CvsSqlError::Unsupported("SELECT without FROM".to_string()));
-        }
-
-        let mut product = None;
-
-        for from in &self.from {
-            if !from.joins.is_empty() {
-                return Err(CvsSqlError::ToDo("SELECT ... JOIN".to_string()));
-            }
-            let from = from.relation.extract(engine)?;
-            product = match product {
-                None => Some(from),
-                Some(left) => Some(join(left, from)),
-            };
-        }
-
-        let Some(product) = product else {
-            return Err(CvsSqlError::Unsupported("SELECT without FROM".to_string()));
-        };
-
-        let filter = make_filter(engine, &self.selection, product)?;
-
-        make_projection(engine, filter, &self.projection)
+fn extract(
+    select: &Select,
+    order: &Option<OrderBy>,
+    engine: &Engine,
+) -> Result<ResultSet, CvsSqlError> {
+    if select.distinct.is_some() {
+        return Err(CvsSqlError::Unsupported("SELECT DISTINCT".to_string()));
     }
+    if select.top.is_some() {
+        return Err(CvsSqlError::Unsupported("SELECT TOP".to_string()));
+    }
+    if select.top_before_distinct {
+        return Err(CvsSqlError::Unsupported("SELECT ALL".to_string()));
+    }
+    if select.into.is_some() {
+        return Err(CvsSqlError::Unsupported("SELECT INTO".to_string()));
+    }
+    if !select.lateral_views.is_empty() {
+        return Err(CvsSqlError::Unsupported("SELECT LATERAL VIEW".to_string()));
+    }
+    if select.prewhere.is_some() {
+        return Err(CvsSqlError::Unsupported("SELECT ... PREWHERE".to_string()));
+    }
+    if !select.cluster_by.is_empty() {
+        return Err(CvsSqlError::Unsupported(
+            "SELECT ... CLUSTER BY".to_string(),
+        ));
+    }
+    if !select.distribute_by.is_empty() {
+        return Err(CvsSqlError::Unsupported(
+            "SELECT ... DISTRIBUTE BY".to_string(),
+        ));
+    }
+    if !select.sort_by.is_empty() {
+        return Err(CvsSqlError::Unsupported("SELECT ... SORT BY".to_string()));
+    }
+    if !select.named_window.is_empty() || select.window_before_qualify {
+        return Err(CvsSqlError::Unsupported("SELECT ... WINDOW ".to_string()));
+    }
+    if select.qualify.is_some() {
+        return Err(CvsSqlError::Unsupported("SELECT ... QUALIFY".to_string()));
+    }
+    if select.value_table_mode.is_some() {
+        return Err(CvsSqlError::Unsupported(
+            "SELECT AS VALUE/STRUCT".to_string(),
+        ));
+    }
+    if select.connect_by.is_some() {
+        return Err(CvsSqlError::Unsupported(
+            "SELECT ... CONNECT BY".to_string(),
+        ));
+    }
+
+    if select.having.is_some() {
+        return Err(CvsSqlError::ToDo("SELECT ... HAVING".to_string()));
+    }
+    match &select.group_by {
+        GroupByExpr::All(_) => {
+            return Err(CvsSqlError::Unsupported(
+                "SELECT ... GROUP BY ALL".to_string(),
+            ))
+        }
+        GroupByExpr::Expressions(exp, mods) => {
+            if !exp.is_empty() {
+                return Err(CvsSqlError::ToDo("SELECT ... GROUP BY".to_string()));
+            }
+            if !mods.is_empty() {
+                return Err(CvsSqlError::ToDo("SELECT ... GROUP BY".to_string()));
+            }
+        }
+    }
+
+    if select.from.is_empty() {
+        return Err(CvsSqlError::Unsupported("SELECT without FROM".to_string()));
+    }
+
+    let mut product = None;
+
+    for from in &select.from {
+        if !from.joins.is_empty() {
+            return Err(CvsSqlError::ToDo("SELECT ... JOIN".to_string()));
+        }
+        let from = from.relation.extract(engine)?;
+        product = match product {
+            None => Some(from),
+            Some(left) => Some(join(left, from)),
+        };
+    }
+
+    let Some(product) = product else {
+        return Err(CvsSqlError::Unsupported("SELECT without FROM".to_string()));
+    };
+
+    let mut filter = make_filter(engine, &select.selection, product)?;
+
+    order_by(engine, order, &mut filter)?;
+    make_projection(engine, filter, &select.projection)
 }
 
 impl Extractor for TableFactor {

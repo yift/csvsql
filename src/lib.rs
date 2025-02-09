@@ -8,6 +8,7 @@ mod extractor;
 mod file_results;
 mod filter_results;
 mod named_results;
+mod order_by_results;
 mod projections;
 mod result_set_metadata;
 pub mod results;
