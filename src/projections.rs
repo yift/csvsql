@@ -6,6 +6,7 @@ use sqlparser::ast::{
 use crate::cast::create_cast;
 use crate::engine::Engine;
 use crate::error::CvsSqlError;
+use crate::extract_time::create_extract;
 use crate::extractor::Extractor;
 use crate::result_set_metadata::SimpleResultSetMetadata;
 use crate::results_data::{DataRow, ResultsData};
@@ -1031,6 +1032,14 @@ impl SingleConvert for Expr {
                 };
                 let value = expr.convert_single(parent, engine)?;
                 create_cast(data_type, value)
+            }
+            Expr::Extract {
+                field,
+                syntax: _,
+                expr,
+            } => {
+                let value = expr.convert_single(parent, engine)?;
+                create_extract(field, value)
             }
 
             _ => Err(CvsSqlError::ToDo(format!(

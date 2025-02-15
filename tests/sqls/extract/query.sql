@@ -1,0 +1,13 @@
+SELECT EXTRACT(day FROM dt) AS day_from_date, EXTRACT(day FROM ts) AS day_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(dow FROM dt) AS dow_from_date, EXTRACT(dow FROM ts) AS dow_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(doy FROM dt) AS doy_from_date, EXTRACT(doy FROM ts) AS doy_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(hour FROM dt) AS hour_from_date, EXTRACT(hour FROM ts) AS hour_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(minute FROM dt) AS minute_from_date, EXTRACT(minute FROM ts) AS minute_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(second FROM dt) AS second_from_date, EXTRACT(second FROM ts) AS second_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(epoch FROM dt) AS epoch_from_date, EXTRACT(epoch FROM ts) AS epoch_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(isodow FROM dt) AS isodow_from_date, EXTRACT(isodow FROM ts) AS isodow_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(isoweek FROM dt) AS isoweek_from_date, EXTRACT(isoweek FROM ts) AS isoweek_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(isoyear FROM dt) AS isoyear_from_date, EXTRACT(isoyear FROM ts) AS isoyear_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(microseconds FROM dt) AS ms_from_date, EXTRACT(microseconds FROM ts) AS ms_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(milliseconds FROM dt) AS ms_from_date, EXTRACT(milliseconds FROM ts) AS ms_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(nanoseconds FROM dt) AS ns_from_date, EXTRACT(nanoseconds FROM ts) AS ns_from_timestamp FROM tests.data.dates ORDER BY amount;

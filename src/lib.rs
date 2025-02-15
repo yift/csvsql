@@ -4,6 +4,7 @@ mod cast;
 mod dialect;
 pub mod engine;
 pub mod error;
+mod extract_time;
 mod extractor;
 mod file_results;
 mod filter_results;
