@@ -1,6 +1,8 @@
+use bigdecimal::{BigDecimal, FromPrimitive};
 use regex::Regex;
 use sqlparser::ast::{
-    BinaryOperator, Expr, Query, SelectItem, UnaryOperator, WildcardAdditionalOptions,
+    BinaryOperator, CeilFloorKind, DateTimeField, Expr, Query, SelectItem, UnaryOperator,
+    WildcardAdditionalOptions,
 };
 
 use crate::cast::create_cast;
@@ -672,6 +674,42 @@ impl UnaryFunction for PlusUnary {
     }
 }
 
+struct Ceil {}
+impl UnaryFunction for Ceil {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        match value.deref() {
+            Value::Number(num) => {
+                Value::Number(num.with_scale_round(0, bigdecimal::RoundingMode::Ceiling)).into()
+            }
+            _ => Value::Empty.into(),
+        }
+    }
+    fn name(&self) -> &str {
+        "CEIL"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Function
+    }
+}
+
+struct Floor {}
+impl UnaryFunction for Floor {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+        match value.deref() {
+            Value::Number(num) => {
+                Value::Number(num.with_scale_round(0, bigdecimal::RoundingMode::Floor)).into()
+            }
+            _ => Value::Empty.into(),
+        }
+    }
+    fn name(&self) -> &str {
+        "FLOOR"
+    }
+    fn function_type(&self) -> UnaryFunctionType {
+        UnaryFunctionType::Function
+    }
+}
+
 struct InProjection {
     value: Box<dyn Projection>,
     list: Vec<Box<dyn Projection>>,
@@ -1041,6 +1079,40 @@ impl SingleConvert for Expr {
                 let value = expr.convert_single(parent, engine)?;
                 create_extract(field, value)
             }
+            Expr::Ceil { expr, field } => {
+                match field {
+                    CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => {}
+                    _ => {
+                        return Err(CvsSqlError::Unsupported(
+                            "CEIL with two arguments".to_string(),
+                        ))
+                    }
+                }
+
+                let value = expr.convert_single(parent, engine)?;
+                let operator = Box::new(Ceil {});
+                Ok(Box::new(UnartyProjection::new(value, operator)))
+            }
+            Expr::Floor { expr, field } => {
+                match field {
+                    CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => {}
+                    _ => {
+                        return Err(CvsSqlError::Unsupported(
+                            "CEIL with two arguments".to_string(),
+                        ))
+                    }
+                }
+
+                let value = expr.convert_single(parent, engine)?;
+                let operator = Box::new(Floor {});
+                Ok(Box::new(UnartyProjection::new(value, operator)))
+            }
+            Expr::Position { expr, r#in } => {
+                let sub_str = expr.convert_single(parent, engine)?;
+                let str = r#in.convert_single(parent, engine)?;
+                let func = Position::new(str, sub_str);
+                Ok(Box::new(func))
+            }
 
             _ => Err(CvsSqlError::ToDo(format!(
                 "Select expression like {}",
@@ -1063,5 +1135,40 @@ impl SingleConvert for Name {
             column_name: self.short_name().to_string(),
         });
         Ok(projection)
+    }
+}
+
+struct Position {
+    str: Box<dyn Projection>,
+    sub_str: Box<dyn Projection>,
+    name: String,
+}
+impl Projection for Position {
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        let str = self.str.get(row);
+        let sub_str = self.sub_str.get(row);
+
+        let Value::Str(sub_str) = sub_str.deref() else {
+            return Value::Empty.into();
+        };
+        let Value::Str(str) = str.deref() else {
+            return Value::Empty.into();
+        };
+        let num = str.find(sub_str).map(|f| f + 1).unwrap_or(0);
+        let num = match BigDecimal::from_usize(num) {
+            None => Value::Empty,
+            Some(num) => Value::Number(num),
+        };
+
+        num.into()
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+impl Position {
+    fn new(str: Box<dyn Projection>, sub_str: Box<dyn Projection>) -> Self {
+        let name = format!("POSITION({} IN {})", sub_str.name(), sub_str.name());
+        Self { name, str, sub_str }
     }
 }
