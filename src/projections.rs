@@ -1,4 +1,4 @@
-use bigdecimal::{BigDecimal, FromPrimitive};
+use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
 use regex::Regex;
 use sqlparser::ast::{
     BinaryOperator, CeilFloorKind, DateTimeField, Expr, Query, SelectItem, UnaryOperator,
@@ -850,6 +850,90 @@ impl Between {
     }
 }
 
+struct SubString {
+    str: Box<dyn Projection>,
+    from: Option<Box<dyn Projection>>,
+    size: Option<Box<dyn Projection>>,
+    name: String,
+}
+
+impl Projection for SubString {
+    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+        let str = self.str.get(row);
+        let Value::Str(str) = str.deref() else {
+            return Value::Empty.into();
+        };
+        let mut str = str.to_string();
+        if let Some(from) = &self.from {
+            let from = from.get(row);
+            let Value::Number(from) = from.deref() else {
+                return Value::Empty.into();
+            };
+            let Some(mut from) = from.to_usize() else {
+                return Value::Empty.into();
+            };
+            from = from.saturating_sub(1);
+            if from >= str.len() {
+                return Value::Empty.into();
+            }
+            str = str[from..].to_string();
+        }
+        if let Some(size) = &self.size {
+            let size = size.get(row);
+            let Value::Number(size) = size.deref() else {
+                return Value::Empty.into();
+            };
+            let Some(size) = size.to_usize() else {
+                return Value::Empty.into();
+            };
+            if size < str.len() {
+                str = str[..size].to_string();
+            }
+        }
+        Value::Str(str.to_string()).into()
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl SubString {
+    fn new(
+        str: &Expr,
+        from: &Option<Box<Expr>>,
+        size: &Option<Box<Expr>>,
+        engine: &Engine,
+        parent: &ResultSet,
+    ) -> Result<Self, CvsSqlError> {
+        let str = str.convert_single(parent, engine)?;
+        let from = match from {
+            Some(from) => Some(from.convert_single(parent, engine)?),
+            None => None,
+        };
+        let size = match size {
+            Some(size) => Some(size.convert_single(parent, engine)?),
+            None => None,
+        };
+        let name = match (&from, &size) {
+            (Some(from), Some(size)) => format!(
+                "SUBSTRING({} FROM {} FOR {})",
+                str.name(),
+                from.name(),
+                size.name()
+            ),
+            (Some(from), None) => format!("SUBSTRING({} FROM {})", str.name(), from.name()),
+            (None, Some(size)) => format!("SUBSTRING({} FOR {})", str.name(), size.name()),
+            (None, None) => format!("SUBSTRING({})", str.name()),
+        };
+        Ok(Self {
+            str,
+            from,
+            size,
+            name,
+        })
+    }
+}
+
 struct RegexProjection {
     value: Box<dyn Projection>,
     regex: Box<dyn Projection>,
@@ -1112,6 +1196,15 @@ impl SingleConvert for Expr {
                 let str = r#in.convert_single(parent, engine)?;
                 let func = Position::new(str, sub_str);
                 Ok(Box::new(func))
+            }
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                special: _,
+            } => {
+                let sub = SubString::new(expr, substring_from, substring_for, engine, parent)?;
+                Ok(Box::new(sub))
             }
 
             _ => Err(CvsSqlError::ToDo(format!(

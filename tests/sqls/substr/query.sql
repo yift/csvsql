@@ -1,0 +1,1 @@
+SELECT company,  SUBSTRING(company FOR 12) AS start, SUBSTRING(company FROM 12) AS end, SUBSTRING(company FROM 5 FOR 10) AS middle, SUBSTRING(company FROM 20 FOR 10) AS further_middle FROM tests.data.customers;
