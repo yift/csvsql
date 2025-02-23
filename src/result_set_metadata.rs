@@ -41,6 +41,10 @@ impl Metadata {
         let right = Box::new(right);
         Metadata::Product(ProductResultSetMetadata { left, right })
     }
+
+    pub fn columns(&self) -> Box<dyn Iterator<Item = Column>> {
+        Box::new((0..self.number_of_columns()).map(Column::from_index))
+    }
 }
 pub struct ProductResultSetMetadata {
     left: Box<Metadata>,

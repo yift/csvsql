@@ -17,7 +17,7 @@ impl OrderByItem {
         if expr.with_fill.is_some() {
             return Err(CvsSqlError::Unsupported("ORDER BY with fill".into()));
         }
-        let by = expr.expr.convert_single(parent, engine)?;
+        let by = expr.expr.convert_single(&parent.metadata, engine)?;
         let asc = expr.asc.unwrap_or(true);
         let empty_first = expr.nulls_first.unwrap_or(false);
 

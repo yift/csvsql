@@ -12,7 +12,7 @@ pub fn make_filter(
     let Some(condition) = filter else {
         return Ok(results);
     };
-    let condition = condition.convert_single(&results, engine)?;
+    let condition = condition.convert_single(&results.metadata, engine)?;
     let data = results
         .data
         .into_iter()

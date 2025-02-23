@@ -10,7 +10,7 @@ use crate::engine::Engine;
 use crate::error::CvsSqlError;
 use crate::extract_time::create_extract;
 use crate::extractor::Extractor;
-use crate::result_set_metadata::SimpleResultSetMetadata;
+use crate::result_set_metadata::{Metadata, SimpleResultSetMetadata};
 use crate::results_data::{DataRow, ResultsData};
 use crate::util::SmartReference;
 use crate::{
@@ -47,7 +47,7 @@ pub fn make_projection(
     let mut projections = Vec::new();
     let mut metadata = SimpleResultSetMetadata::new(parent.metadata.result_name().cloned());
     for item in items {
-        let mut items = item.convert(&parent, engine)?;
+        let mut items = item.convert(&parent.metadata, engine)?;
         for i in &items {
             metadata.add_column(i.name());
         }
@@ -70,21 +70,21 @@ pub fn make_projection(
 trait Convert {
     fn convert(
         &self,
-        parent: &ResultSet,
+        metadata: &Metadata,
         engine: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError>;
 }
 impl Convert for SelectItem {
     fn convert(
         &self,
-        parent: &ResultSet,
+        metadata: &Metadata,
         engine: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         match self {
-            SelectItem::Wildcard(options) => options.convert(parent, engine),
-            SelectItem::UnnamedExpr(exp) => exp.convert(parent, engine),
+            SelectItem::Wildcard(options) => options.convert(metadata, engine),
+            SelectItem::UnnamedExpr(exp) => exp.convert(metadata, engine),
             SelectItem::ExprWithAlias { expr, alias } => {
-                let data = expr.convert_single(parent, engine)?;
+                let data = expr.convert_single(metadata, engine)?;
                 let alias = alias.value.to_string();
                 Ok(vec![Box::new(AliasProjection { data, alias })])
             }
@@ -95,7 +95,7 @@ impl Convert for SelectItem {
 impl Convert for WildcardAdditionalOptions {
     fn convert(
         &self,
-        parent: &ResultSet,
+        metadata: &Metadata,
         _: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         if self.opt_ilike.is_some() {
@@ -114,8 +114,7 @@ impl Convert for WildcardAdditionalOptions {
             return Err(CvsSqlError::Unsupported("Select * RENAME".into()));
         }
         let mut projections: Vec<Box<dyn Projection>> = Vec::new();
-        let metadata = &parent.metadata;
-        for column in parent.columns() {
+        for column in metadata.columns() {
             let Some(column_name) = metadata.column_name(&column) else {
                 return Err(CvsSqlError::Unsupported(
                     "Select * with unnamed column".into(),
@@ -134,7 +133,7 @@ impl Convert for WildcardAdditionalOptions {
 pub trait SingleConvert {
     fn convert_single(
         &self,
-        parent: &ResultSet,
+        metadata: &Metadata,
         engine: &Engine,
     ) -> Result<Box<dyn Projection>, CvsSqlError>;
 }
@@ -481,10 +480,10 @@ impl BinaryProjection {
 impl<T: SingleConvert> Convert for T {
     fn convert(
         &self,
-        parent: &ResultSet,
+        metadata: &Metadata,
         engine: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
-        let result = self.convert_single(parent, engine)?;
+        let result = self.convert_single(metadata, engine)?;
         Ok(vec![result])
     }
 }
@@ -768,7 +767,7 @@ impl InSubquery {
         subquery: &Query,
         negated: &bool,
         engine: &Engine,
-        parent: &ResultSet,
+        metadata: &Metadata,
     ) -> Result<Self, CvsSqlError> {
         let results = subquery.extract(engine)?;
         if results.metadata.number_of_columns() != 1 {
@@ -778,7 +777,7 @@ impl InSubquery {
         }
         let not = if *negated { "NOT " } else { "" };
         let name = format!("{} {}IN ({})", expr, not, subquery);
-        let value = expr.convert_single(parent, engine)?;
+        let value = expr.convert_single(metadata, engine)?;
         let mut list = HashSet::new();
         let col = Column::from_index(0);
         for row in results.data.iter() {
@@ -827,11 +826,11 @@ impl Between {
         high: &Expr,
         negated: &bool,
         engine: &Engine,
-        parent: &ResultSet,
+        metadata: &Metadata,
     ) -> Result<Self, CvsSqlError> {
-        let value = expr.convert_single(parent, engine)?;
-        let low = low.convert_single(parent, engine)?;
-        let high = high.convert_single(parent, engine)?;
+        let value = expr.convert_single(metadata, engine)?;
+        let low = low.convert_single(metadata, engine)?;
+        let high = high.convert_single(metadata, engine)?;
         let neg = if *negated { "NOT " } else { "" };
         let name = format!(
             "{}{} BETWEEN {} AMD {}",
@@ -903,15 +902,15 @@ impl SubString {
         from: &Option<Box<Expr>>,
         size: &Option<Box<Expr>>,
         engine: &Engine,
-        parent: &ResultSet,
+        metadata: &Metadata,
     ) -> Result<Self, CvsSqlError> {
-        let str = str.convert_single(parent, engine)?;
+        let str = str.convert_single(metadata, engine)?;
         let from = match from {
-            Some(from) => Some(from.convert_single(parent, engine)?),
+            Some(from) => Some(from.convert_single(metadata, engine)?),
             None => None,
         };
         let size = match size {
-            Some(size) => Some(size.convert_single(parent, engine)?),
+            Some(size) => Some(size.convert_single(metadata, engine)?),
             None => None,
         };
         let name = match (&from, &size) {
@@ -965,10 +964,10 @@ impl RegexProjection {
         regex: &Expr,
         negated: &bool,
         engine: &Engine,
-        parent: &ResultSet,
+        metadata: &Metadata,
     ) -> Result<Self, CvsSqlError> {
-        let value = expr.convert_single(parent, engine)?;
-        let regex = regex.convert_single(parent, engine)?;
+        let value = expr.convert_single(metadata, engine)?;
+        let regex = regex.convert_single(metadata, engine)?;
         let neg = if *negated { "NOT " } else { "" };
         let name = format!("{}{} REGEXP {}", neg, value.name(), regex.name(),);
         Ok(Self {
@@ -982,22 +981,22 @@ impl RegexProjection {
 impl SingleConvert for Expr {
     fn convert_single(
         &self,
-        parent: &ResultSet,
+        metadata: &Metadata,
         engine: &Engine,
     ) -> Result<Box<dyn Projection>, CvsSqlError> {
         match self {
             Expr::Identifier(ident) => {
                 let name: Name = ident.value.to_string().into();
-                name.convert_single(parent, engine)
+                name.convert_single(metadata, engine)
             }
             Expr::CompoundIdentifier(idents) => {
                 let names: Vec<_> = idents.iter().map(|i| i.value.to_string()).collect();
                 let name: Name = names.into();
-                name.convert_single(parent, engine)
+                name.convert_single(metadata, engine)
             }
             Expr::BinaryOp { left, op, right } => {
-                let left = left.convert_single(parent, engine)?;
-                let right = right.convert_single(parent, engine)?;
+                let left = left.convert_single(metadata, engine)?;
+                let right = right.convert_single(metadata, engine)?;
                 let operator: Box<dyn BinaryFunction> = match op {
                     BinaryOperator::Plus => Box::new(Plus {}),
                     BinaryOperator::Multiply => Box::new(Times {}),
@@ -1039,32 +1038,32 @@ impl SingleConvert for Expr {
                 }
             }
             Expr::IsFalse(val) => {
-                let value = val.convert_single(parent, engine)?;
+                let value = val.convert_single(metadata, engine)?;
                 let operator = Box::new(IsFalse {});
                 Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsNotFalse(val) => {
-                let value = val.convert_single(parent, engine)?;
+                let value = val.convert_single(metadata, engine)?;
                 let operator = Box::new(IsNotFalse {});
                 Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsTrue(val) => {
-                let value = val.convert_single(parent, engine)?;
+                let value = val.convert_single(metadata, engine)?;
                 let operator = Box::new(IsTrue {});
                 Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsNotTrue(val) => {
-                let value = val.convert_single(parent, engine)?;
+                let value = val.convert_single(metadata, engine)?;
                 let operator = Box::new(IsNotTrue {});
                 Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsNull(val) => {
-                let value = val.convert_single(parent, engine)?;
+                let value = val.convert_single(metadata, engine)?;
                 let operator = Box::new(IsNull {});
                 Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::IsNotNull(val) => {
-                let value = val.convert_single(parent, engine)?;
+                let value = val.convert_single(metadata, engine)?;
                 let operator = Box::new(IsNotNull {});
                 Ok(Box::new(UnartyProjection::new(value, operator)))
             }
@@ -1073,10 +1072,10 @@ impl SingleConvert for Expr {
                 list,
                 negated,
             } => {
-                let value = expr.convert_single(parent, engine)?;
+                let value = expr.convert_single(metadata, engine)?;
                 let mut items = Vec::new();
                 for item in list {
-                    items.push(item.convert_single(parent, engine)?);
+                    items.push(item.convert_single(metadata, engine)?);
                 }
 
                 Ok(Box::new(InProjection::new(value, items, *negated)))
@@ -1086,7 +1085,7 @@ impl SingleConvert for Expr {
                 subquery,
                 negated,
             } => {
-                let expr = InSubquery::new(expr, subquery, negated, engine, parent)?;
+                let expr = InSubquery::new(expr, subquery, negated, engine, metadata)?;
                 Ok(Box::new(expr))
             }
             Expr::Between {
@@ -1095,7 +1094,7 @@ impl SingleConvert for Expr {
                 low,
                 high,
             } => {
-                let expr = Between::new(expr, low, high, negated, engine, parent)?;
+                let expr = Between::new(expr, low, high, negated, engine, metadata)?;
                 Ok(Box::new(expr))
             }
             Expr::RLike {
@@ -1104,7 +1103,7 @@ impl SingleConvert for Expr {
                 pattern,
                 regexp: _,
             } => {
-                let expr = RegexProjection::new(expr, pattern, negated, engine, parent)?;
+                let expr = RegexProjection::new(expr, pattern, negated, engine, metadata)?;
                 Ok(Box::new(expr))
             }
             Expr::SimilarTo {
@@ -1113,7 +1112,7 @@ impl SingleConvert for Expr {
                 pattern,
                 escape_char: _,
             } => {
-                let expr = RegexProjection::new(expr, pattern, negated, engine, parent)?;
+                let expr = RegexProjection::new(expr, pattern, negated, engine, metadata)?;
                 Ok(Box::new(expr))
             }
             Expr::UnaryOp { op, expr } => {
@@ -1123,7 +1122,7 @@ impl SingleConvert for Expr {
                     UnaryOperator::Not => Box::new(Not {}),
                     _ => return Err(CvsSqlError::Unsupported(format!("Operator: {}", op))),
                 };
-                let value = expr.convert_single(parent, engine)?;
+                let value = expr.convert_single(metadata, engine)?;
                 Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::Cast {
@@ -1135,7 +1134,7 @@ impl SingleConvert for Expr {
                 if format.is_some() {
                     return Err(CvsSqlError::Unsupported("CAST with format".to_string()));
                 }
-                let value = expr.convert_single(parent, engine)?;
+                let value = expr.convert_single(metadata, engine)?;
                 create_cast(data_type, value)
             }
             Expr::Convert {
@@ -1152,7 +1151,7 @@ impl SingleConvert for Expr {
                 let Some(data_type) = data_type else {
                     return Err(CvsSqlError::Unsupported("CONVERT with charset".to_string()));
                 };
-                let value = expr.convert_single(parent, engine)?;
+                let value = expr.convert_single(metadata, engine)?;
                 create_cast(data_type, value)
             }
             Expr::Extract {
@@ -1160,7 +1159,7 @@ impl SingleConvert for Expr {
                 syntax: _,
                 expr,
             } => {
-                let value = expr.convert_single(parent, engine)?;
+                let value = expr.convert_single(metadata, engine)?;
                 create_extract(field, value)
             }
             Expr::Ceil { expr, field } => {
@@ -1173,7 +1172,7 @@ impl SingleConvert for Expr {
                     }
                 }
 
-                let value = expr.convert_single(parent, engine)?;
+                let value = expr.convert_single(metadata, engine)?;
                 let operator = Box::new(Ceil {});
                 Ok(Box::new(UnartyProjection::new(value, operator)))
             }
@@ -1187,13 +1186,13 @@ impl SingleConvert for Expr {
                     }
                 }
 
-                let value = expr.convert_single(parent, engine)?;
+                let value = expr.convert_single(metadata, engine)?;
                 let operator = Box::new(Floor {});
                 Ok(Box::new(UnartyProjection::new(value, operator)))
             }
             Expr::Position { expr, r#in } => {
-                let sub_str = expr.convert_single(parent, engine)?;
-                let str = r#in.convert_single(parent, engine)?;
+                let sub_str = expr.convert_single(metadata, engine)?;
+                let str = r#in.convert_single(metadata, engine)?;
                 let func = Position::new(str, sub_str);
                 Ok(Box::new(func))
             }
@@ -1203,7 +1202,7 @@ impl SingleConvert for Expr {
                 substring_for,
                 special: _,
             } => {
-                let sub = SubString::new(expr, substring_from, substring_for, engine, parent)?;
+                let sub = SubString::new(expr, substring_from, substring_for, engine, metadata)?;
                 Ok(Box::new(sub))
             }
 
@@ -1218,10 +1217,9 @@ impl SingleConvert for Expr {
 impl SingleConvert for Name {
     fn convert_single(
         &self,
-        parent: &ResultSet,
+        metadata: &Metadata,
         _: &Engine,
     ) -> Result<Box<dyn Projection>, CvsSqlError> {
-        let metadata = &parent.metadata;
         let column = metadata.column_index(self)?;
         let projection = Box::new(ColumnProjection {
             column: column.clone(),

@@ -101,7 +101,7 @@ pub struct ResultSet {
 }
 impl ResultSet {
     pub fn columns(&self) -> Box<dyn Iterator<Item = Column>> {
-        Box::new((0..self.metadata.number_of_columns()).map(|column| Column { column }))
+        self.metadata.columns()
     }
     pub fn value<'a>(&self, name: &Name, row: &'a DataRow) -> &'a Value {
         match self.metadata.column_index(name) {
