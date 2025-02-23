@@ -8,6 +8,7 @@ mod extract_time;
 mod extractor;
 mod file_results;
 mod filter_results;
+mod intrim_result_set;
 mod named_results;
 mod order_by_results;
 mod projections;

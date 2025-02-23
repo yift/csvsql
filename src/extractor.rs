@@ -4,6 +4,7 @@ use crate::cartesian_product_results::join;
 use crate::error::CvsSqlError;
 use crate::file_results::read_file;
 use crate::filter_results::make_filter;
+use crate::intrim_result_set::group_by;
 use crate::named_results::alias_results;
 use crate::order_by_results::order_by;
 use crate::projections::make_projection;
@@ -125,25 +126,6 @@ fn extract(
         ));
     }
 
-    if select.having.is_some() {
-        return Err(CvsSqlError::ToDo("SELECT ... HAVING".to_string()));
-    }
-    match &select.group_by {
-        GroupByExpr::All(_) => {
-            return Err(CvsSqlError::Unsupported(
-                "SELECT ... GROUP BY ALL".to_string(),
-            ))
-        }
-        GroupByExpr::Expressions(exp, mods) => {
-            if !exp.is_empty() {
-                return Err(CvsSqlError::ToDo("SELECT ... GROUP BY".to_string()));
-            }
-            if !mods.is_empty() {
-                return Err(CvsSqlError::ToDo("SELECT ... GROUP BY".to_string()));
-            }
-        }
-    }
-
     if select.from.is_empty() {
         return Err(CvsSqlError::Unsupported("SELECT without FROM".to_string()));
     }
@@ -167,7 +149,24 @@ fn extract(
 
     let mut filter = make_filter(engine, &select.selection, product)?;
 
-    order_by(engine, order, &mut filter)?;
+    let mut group_by = match &select.group_by {
+        GroupByExpr::All(_) => {
+            return Err(CvsSqlError::Unsupported(
+                "SELECT ... GROUP BY ALL".to_string(),
+            ))
+        }
+        GroupByExpr::Expressions(exp, mods) => {
+            if !mods.is_empty() {
+                return Err(CvsSqlError::ToDo("SELECT ... GROUP BY".to_string()));
+            }
+            group_by(engine, &exp, filter)?
+        }
+    };
+    if select.having.is_some() {
+        return Err(CvsSqlError::ToDo("SELECT ... HAVING".to_string()));
+    }
+
+    order_by(engine, order, &mut group_by)?;
     make_projection(engine, filter, &select.projection)
 }
 

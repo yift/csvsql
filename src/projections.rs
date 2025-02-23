@@ -10,6 +10,7 @@ use crate::engine::Engine;
 use crate::error::CvsSqlError;
 use crate::extract_time::create_extract;
 use crate::extractor::Extractor;
+use crate::intrim_result_set::IntrimResultSet;
 use crate::result_set_metadata::SimpleResultSetMetadata;
 use crate::results_data::{DataRow, ResultsData};
 use crate::util::SmartReference;
@@ -41,11 +42,11 @@ impl Projection for ColumnProjection {
 
 pub fn make_projection(
     engine: &Engine,
-    parent: ResultSet,
+    parent: IntrimResultSet,
     items: &[SelectItem],
 ) -> Result<ResultSet, CvsSqlError> {
     let mut projections = Vec::new();
-    let mut metadata = SimpleResultSetMetadata::new(parent.metadata.result_name().cloned());
+    let mut metadata = SimpleResultSetMetadata::new(parent.metadata().result_name().cloned());
     for item in items {
         let mut items = item.convert(&parent, engine)?;
         for i in &items {
@@ -70,21 +71,21 @@ pub fn make_projection(
 trait Convert {
     fn convert(
         &self,
-        parent: &ResultSet,
+        parent: &IntrimResultSet,
         engine: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError>;
 }
 impl Convert for SelectItem {
     fn convert(
         &self,
-        parent: &ResultSet,
+        parent: &IntrimResultSet,
         engine: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         match self {
             SelectItem::Wildcard(options) => options.convert(parent, engine),
             SelectItem::UnnamedExpr(exp) => exp.convert(parent, engine),
             SelectItem::ExprWithAlias { expr, alias } => {
-                let data = expr.convert_single(parent, engine)?;
+                let data = expr.convert_single(engine)?;
                 let alias = alias.value.to_string();
                 Ok(vec![Box::new(AliasProjection { data, alias })])
             }
@@ -95,7 +96,7 @@ impl Convert for SelectItem {
 impl Convert for WildcardAdditionalOptions {
     fn convert(
         &self,
-        parent: &ResultSet,
+        parent: &IntrimResultSet,
         _: &Engine,
     ) -> Result<Vec<Box<dyn Projection>>, CvsSqlError> {
         if self.opt_ilike.is_some() {
@@ -134,7 +135,6 @@ impl Convert for WildcardAdditionalOptions {
 pub trait SingleConvert {
     fn convert_single(
         &self,
-        parent: &ResultSet,
         engine: &Engine,
     ) -> Result<Box<dyn Projection>, CvsSqlError>;
 }
@@ -982,7 +982,6 @@ impl RegexProjection {
 impl SingleConvert for Expr {
     fn convert_single(
         &self,
-        parent: &ResultSet,
         engine: &Engine,
     ) -> Result<Box<dyn Projection>, CvsSqlError> {
         match self {

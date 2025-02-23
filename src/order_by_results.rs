@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::ops::Deref;
 
 use crate::error::CvsSqlError;
+use crate::intrim_result_set::IntrimResultSet;
 use crate::projections::Projection;
 use crate::results_data::DataRow;
 use crate::{engine::Engine, projections::SingleConvert, results::ResultSet};
@@ -13,7 +14,7 @@ struct OrderByItem {
     empty_first: bool,
 }
 impl OrderByItem {
-    fn new(parent: &ResultSet, engine: &Engine, expr: &OrderByExpr) -> Result<Self, CvsSqlError> {
+    fn new(parent: &IntrimResultSet, engine: &Engine, expr: &OrderByExpr) -> Result<Self, CvsSqlError> {
         if expr.with_fill.is_some() {
             return Err(CvsSqlError::Unsupported("ORDER BY with fill".into()));
         }
@@ -61,7 +62,7 @@ impl OrderByItem {
 pub fn order_by(
     engine: &Engine,
     order_by: &Option<OrderBy>,
-    results: &mut ResultSet,
+    results: &mut IntrimResultSet,
 ) -> Result<(), CvsSqlError> {
     let Some(order_by) = order_by else {
         return Ok(());
