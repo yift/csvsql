@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::{results::Column, value::Value};
 
 pub struct DataRow {
@@ -25,8 +23,5 @@ impl ResultsData {
     }
     pub(crate) fn new(rows: Vec<DataRow>) -> Self {
         Self { rows }
-    }
-    pub(crate) fn sort_by(&mut self, by: impl FnMut(&DataRow, &DataRow) -> Ordering) {
-        self.rows.sort_by(by);
     }
 }

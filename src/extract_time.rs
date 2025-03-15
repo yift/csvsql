@@ -5,7 +5,7 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use sqlparser::ast::DateTimeField;
 
 use crate::{
-    error::CvsSqlError, projections::Projection, results_data::DataRow, util::SmartReference,
+    error::CvsSqlError, group_by::GroupRow, projections::Projection, util::SmartReference,
     value::Value,
 };
 
@@ -19,7 +19,7 @@ impl Projection for TimeFieldExtractor {
     fn name(&self) -> &str {
         &self.name
     }
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let value = self.value.get(row);
         match value.deref() {
             Value::Timestamp(ts) => extract_timestamp(&self.field, ts),

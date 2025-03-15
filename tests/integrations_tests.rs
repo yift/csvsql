@@ -8,8 +8,8 @@ use std::{
 use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive, Zero};
 use chrono::{DateTime, NaiveDateTime};
 use csvsql::{
-    args::Args, engine::Engine, error::CvsSqlError, results::Column, value::Value,
-    writer::new_csv_writer, writer::Writer,
+    args::Args, engine::Engine, error::CvsSqlError, results::Column, value::Value, writer::Writer,
+    writer::new_csv_writer,
 };
 
 struct Customer {

@@ -1,4 +1,4 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 use crate::{
     results::{Column, ColumnIndexError, Name},
@@ -8,18 +8,24 @@ use crate::{
 pub enum Metadata {
     Simple(SimpleResultSetMetadata),
     Product(ProductResultSetMetadata),
+    Grouped {
+        parent: Box<Metadata>,
+        this: Box<Metadata>,
+    },
 }
 impl Metadata {
     pub fn column_index(&self, name: &Name) -> Result<SmartReference<Column>, ColumnIndexError> {
         match self {
             Metadata::Simple(data) => data.column_index(name),
             Metadata::Product(data) => data.column_index(name),
+            Metadata::Grouped { parent: _, this } => this.column_index(name),
         }
     }
     pub fn column_name(&self, column: &Column) -> Option<&Name> {
         match self {
             Metadata::Simple(data) => data.column_name(column),
             Metadata::Product(data) => data.column_name(column),
+            Metadata::Grouped { parent: _, this } => this.column_name(column),
         }
     }
     pub fn number_of_columns(&self) -> usize {
@@ -28,12 +34,14 @@ impl Metadata {
             Metadata::Product(data) => {
                 data.left.number_of_columns() * data.right.number_of_columns()
             }
+            Metadata::Grouped { parent: _, this } => this.number_of_columns(),
         }
     }
     pub fn result_name(&self) -> Option<&Name> {
         match self {
             Metadata::Simple(data) => data.name.as_ref(),
             Metadata::Product(_) => None,
+            Metadata::Grouped { parent: _, this } => this.result_name(),
         }
     }
     pub(crate) fn product(left: Self, right: Self) -> Self {

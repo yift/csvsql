@@ -2,9 +2,9 @@ use std::cmp::Ordering;
 use std::ops::Deref;
 
 use crate::error::CvsSqlError;
+use crate::group_by::{GroupRow, GroupedResultSet};
 use crate::projections::Projection;
-use crate::results_data::DataRow;
-use crate::{engine::Engine, projections::SingleConvert, results::ResultSet};
+use crate::{engine::Engine, projections::SingleConvert};
 use sqlparser::ast::{OrderBy, OrderByExpr};
 
 struct OrderByItem {
@@ -13,7 +13,11 @@ struct OrderByItem {
     empty_first: bool,
 }
 impl OrderByItem {
-    fn new(parent: &ResultSet, engine: &Engine, expr: &OrderByExpr) -> Result<Self, CvsSqlError> {
+    fn new(
+        parent: &GroupedResultSet,
+        engine: &Engine,
+        expr: &OrderByExpr,
+    ) -> Result<Self, CvsSqlError> {
         if expr.with_fill.is_some() {
             return Err(CvsSqlError::Unsupported("ORDER BY with fill".into()));
         }
@@ -28,15 +32,11 @@ impl OrderByItem {
         })
     }
 
-    fn compare(&self, left: &DataRow, right: &DataRow) -> Ordering {
+    fn compare(&self, left: &GroupRow, right: &GroupRow) -> Ordering {
         let ret = self.compare_as_is(left, right);
-        if self.asc {
-            ret
-        } else {
-            ret.reverse()
-        }
+        if self.asc { ret } else { ret.reverse() }
     }
-    fn compare_as_is(&self, left: &DataRow, right: &DataRow) -> Ordering {
+    fn compare_as_is(&self, left: &GroupRow, right: &GroupRow) -> Ordering {
         let left = self.by.get(left);
         let right = self.by.get(right);
         if left.is_empty() {
@@ -61,7 +61,7 @@ impl OrderByItem {
 pub fn order_by(
     engine: &Engine,
     order_by: &Option<OrderBy>,
-    results: &mut ResultSet,
+    results: &mut GroupedResultSet,
 ) -> Result<(), CvsSqlError> {
     let Some(order_by) = order_by else {
         return Ok(());
@@ -78,7 +78,7 @@ pub fn order_by(
         return Ok(());
     }
 
-    results.data.sort_by(|left, right| {
+    results.rows.sort_by(|left, right| {
         for item in &items {
             let order = item.compare(left, right);
             if order != Ordering::Equal {

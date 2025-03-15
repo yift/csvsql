@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
 use crate::error::CvsSqlError;
+use crate::group_by::GroupRow;
 use crate::results_data::ResultsData;
 use crate::{engine::Engine, projections::SingleConvert, results::ResultSet, value::Value};
 use sqlparser::ast::Expr;
@@ -16,7 +17,12 @@ pub fn make_filter(
     let data = results
         .data
         .into_iter()
+        .map(|d| GroupRow {
+            group_rows: vec![],
+            data: d,
+        })
         .filter(|row| condition.get(row).deref() == &Value::Bool(true))
+        .map(|r| r.data)
         .collect();
     let data = ResultsData::new(data);
     Ok(ResultSet {

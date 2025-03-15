@@ -3,7 +3,7 @@ use csvsql::{
     args::Args,
     engine::Engine,
     error::CvsSqlError,
-    writer::{new_csv_writer, Writer},
+    writer::{Writer, new_csv_writer},
 };
 use std::io::{self};
 use std::io::{BufRead, Write};

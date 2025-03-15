@@ -9,8 +9,8 @@ use chrono::NaiveTime;
 use sqlparser::ast::DataType;
 
 use crate::error::CvsSqlError;
+use crate::group_by::GroupRow;
 use crate::projections::Projection;
-use crate::results_data::DataRow;
 use crate::util::SmartReference;
 use crate::value::Value;
 struct Cast {
@@ -19,7 +19,7 @@ struct Cast {
     name: String,
 }
 impl Projection for Cast {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let value = self.to_cast.get(row);
         self.data_type.convert(value)
     }

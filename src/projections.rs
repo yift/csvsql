@@ -10,6 +10,7 @@ use crate::engine::Engine;
 use crate::error::CvsSqlError;
 use crate::extract_time::create_extract;
 use crate::extractor::Extractor;
+use crate::group_by::{GroupRow, GroupedResultSet};
 use crate::result_set_metadata::{Metadata, SimpleResultSetMetadata};
 use crate::results_data::{DataRow, ResultsData};
 use crate::util::SmartReference;
@@ -23,7 +24,7 @@ use std::collections::HashSet;
 use std::ops::Deref;
 
 pub(crate) trait Projection {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value>;
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value>;
     fn name(&self) -> &str;
 }
 struct ColumnProjection {
@@ -31,8 +32,8 @@ struct ColumnProjection {
     column_name: String,
 }
 impl Projection for ColumnProjection {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
-        row.get(&self.column).into()
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
+        row.data.get(&self.column).into()
     }
     fn name(&self) -> &str {
         &self.column_name
@@ -41,7 +42,7 @@ impl Projection for ColumnProjection {
 
 pub fn make_projection(
     engine: &Engine,
-    parent: ResultSet,
+    parent: GroupedResultSet,
     items: &[SelectItem],
 ) -> Result<ResultSet, CvsSqlError> {
     let mut projections = Vec::new();
@@ -55,7 +56,7 @@ pub fn make_projection(
     }
     let metadata = metadata.build();
     let mut data = Vec::new();
-    for parent_row in parent.data.iter() {
+    for parent_row in parent.rows.iter() {
         let mut row = Vec::new();
         for item in &projections {
             let data = item.get(parent_row);
@@ -434,7 +435,7 @@ struct AliasProjection {
     alias: String,
 }
 impl Projection for AliasProjection {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         self.data.get(row)
     }
     fn name(&self) -> &str {
@@ -451,7 +452,7 @@ impl Projection for BinaryProjection {
     fn name(&self) -> &str {
         &self.name
     }
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let left = self.left.get(row);
         let right = self.right.get(row);
         self.operator.calculate(left, right)
@@ -492,7 +493,7 @@ struct ValueProjection {
     name: String,
 }
 impl Projection for ValueProjection {
-    fn get<'a>(&'a self, _: &DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, _: &GroupRow) -> SmartReference<'a, Value> {
         SmartReference::Borrowed(&self.value)
     }
     fn name(&self) -> &str {
@@ -518,7 +519,7 @@ struct UnartyProjection {
 }
 
 impl Projection for UnartyProjection {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let value = self.value.get(row);
         self.operator.calculate(value)
     }
@@ -719,7 +720,7 @@ impl Projection for InProjection {
     fn name(&self) -> &str {
         &self.name
     }
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let value = self.value.get(row);
         for item in &self.list {
             let item = item.get(row);
@@ -752,7 +753,7 @@ struct InSubquery {
 }
 
 impl Projection for InSubquery {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let value = self.value.get(row);
         let contains = self.list.contains(value.deref());
         Value::Bool(self.negated != contains).into()
@@ -802,7 +803,7 @@ struct Between {
 }
 
 impl Projection for Between {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let value = self.value.get(row);
         let low = self.low.get(row);
         if *value < *low {
@@ -857,7 +858,7 @@ struct SubString {
 }
 
 impl Projection for SubString {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let str = self.str.get(row);
         let Value::Str(str) = str.deref() else {
             return Value::Empty.into();
@@ -941,7 +942,7 @@ struct RegexProjection {
 }
 
 impl Projection for RegexProjection {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let value = self.value.get(row);
         let regex = self.regex.get(row);
         let Ok(regex) = Regex::new(&regex.to_string()) else {
@@ -1168,7 +1169,7 @@ impl SingleConvert for Expr {
                     _ => {
                         return Err(CvsSqlError::Unsupported(
                             "CEIL with two arguments".to_string(),
-                        ))
+                        ));
                     }
                 }
 
@@ -1182,7 +1183,7 @@ impl SingleConvert for Expr {
                     _ => {
                         return Err(CvsSqlError::Unsupported(
                             "CEIL with two arguments".to_string(),
-                        ))
+                        ));
                     }
                 }
 
@@ -1205,6 +1206,7 @@ impl SingleConvert for Expr {
                 let sub = SubString::new(expr, substring_from, substring_for, engine, metadata)?;
                 Ok(Box::new(sub))
             }
+            Expr::Function(func) => func.convert_single(metadata, engine),
 
             _ => Err(CvsSqlError::ToDo(format!(
                 "Select expression like {}",
@@ -1235,7 +1237,7 @@ struct Position {
     name: String,
 }
 impl Projection for Position {
-    fn get<'a>(&'a self, row: &'a DataRow) -> SmartReference<'a, Value> {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
         let str = self.str.get(row);
         let sub_str = self.sub_str.get(row);
 
