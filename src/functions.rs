@@ -148,13 +148,15 @@ impl<D: Default> Projection for AggregatedFunction<D> {
         let mut found_items = HashSet::new();
         for row in row.group_rows.iter() {
             let value = self.argument.get(row);
-            let to_add = if self.distinct {
-                found_items.insert(value.clone())
-            } else {
-                true
-            };
-            if to_add {
-                self.operator.aggregate(&mut agg, value);
+            if !value.is_empty() {
+                let to_add = if self.distinct {
+                    found_items.insert(value.clone())
+                } else {
+                    true
+                };
+                if to_add {
+                    self.operator.aggregate(&mut agg, value);
+                }
             }
         }
 
@@ -235,15 +237,13 @@ impl AggregateOperator for Sum {
 
 struct Max {}
 impl AggregateOperator for Max {
-    type Data = Option<BigDecimal>;
+    type Data = Option<Value>;
     fn aggregate(&self, so_far: &mut Self::Data, value: SmartReference<'_, Value>) {
-        if let Value::Number(num) = value.deref() {
-            match so_far {
-                None => *so_far = Some(num.clone()),
-                Some(max_so_far) => {
-                    if num > max_so_far {
-                        *so_far = Some(num.clone())
-                    }
+        match so_far {
+            None => *so_far = Some(value.clone()),
+            Some(max_so_far) => {
+                if value.deref() > max_so_far {
+                    *so_far = Some(value.clone())
                 }
             }
         }
@@ -251,7 +251,7 @@ impl AggregateOperator for Max {
     fn to_value(&self, data: Self::Data) -> Value {
         match data {
             None => Value::Empty,
-            Some(num) => Value::Number(num),
+            Some(data) => data,
         }
     }
     fn name(&self) -> &str {
@@ -263,15 +263,13 @@ impl AggregateOperator for Max {
 }
 struct Min {}
 impl AggregateOperator for Min {
-    type Data = Option<BigDecimal>;
+    type Data = Option<Value>;
     fn aggregate(&self, so_far: &mut Self::Data, value: SmartReference<'_, Value>) {
-        if let Value::Number(num) = value.deref() {
-            match so_far {
-                None => *so_far = Some(num.clone()),
-                Some(max_so_far) => {
-                    if num < max_so_far {
-                        *so_far = Some(num.clone())
-                    }
+        match so_far {
+            None => *so_far = Some(value.clone()),
+            Some(max_so_far) => {
+                if value.deref() < max_so_far {
+                    *so_far = Some(value.clone())
                 }
             }
         }
@@ -279,7 +277,7 @@ impl AggregateOperator for Min {
     fn to_value(&self, data: Self::Data) -> Value {
         match data {
             None => Value::Empty,
-            Some(num) => Value::Number(num),
+            Some(data) => data,
         }
     }
     fn name(&self) -> &str {
@@ -293,7 +291,7 @@ impl AggregateOperator for Min {
 struct Wildcard {}
 impl Projection for Wildcard {
     fn get<'a>(&'a self, _: &'a GroupRow) -> SmartReference<'a, Value> {
-        Value::Empty.into()
+        Value::Bool(true).into()
     }
     fn name(&self) -> &str {
         "*"
