@@ -1,10 +1,5 @@
 use std::{collections::HashSet, ops::Deref};
 
-use bigdecimal::BigDecimal;
-use sqlparser::ast::{
-    DuplicateTreatment, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
-};
-
 use crate::{
     engine::Engine,
     error::CvsSqlError,
@@ -13,6 +8,14 @@ use crate::{
     result_set_metadata::Metadata,
     util::SmartReference,
     value::Value,
+};
+use bigdecimal::BigDecimal;
+use bigdecimal::FromPrimitive;
+use bigdecimal::ToPrimitive;
+use chrono::{TimeZone, Utc, offset::LocalResult};
+use itertools::Itertools;
+use sqlparser::ast::{
+    DuplicateTreatment, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
 };
 
 impl SingleConvert for Function {
@@ -47,6 +50,38 @@ impl SingleConvert for Function {
             "SUM" => build_aggregator_function(metadata, engine, &self.args, Box::new(Sum {})),
             "MIN" => build_aggregator_function(metadata, engine, &self.args, Box::new(Min {})),
             "MAX" => build_aggregator_function(metadata, engine, &self.args, Box::new(Max {})),
+
+            "ABS" => build_function(metadata, engine, &self.args, Box::new(Abs {})),
+            "ASCII" => build_function(metadata, engine, &self.args, Box::new(Ascii {})),
+            "CHR" => build_function(metadata, engine, &self.args, Box::new(Chr {})),
+            "LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" => {
+                build_function(metadata, engine, &self.args, Box::new(Length {}))
+            }
+            "COALESCE" => build_function(metadata, engine, &self.args, Box::new(Coalece {})),
+            "CONCAT" => build_function(metadata, engine, &self.args, Box::new(Concat {})),
+            "CONCAT_WS" => build_function(metadata, engine, &self.args, Box::new(ConcatWs {})),
+            "CURRENT_DATE" => {
+                build_function(metadata, engine, &self.args, Box::new(CurrentDate {}))
+            }
+            "NOW" | "CURRENT_TIME" | "CURRENT_TIMESTAMP" | "CURTIME" => {
+                build_function(metadata, engine, &self.args, Box::new(Now {}))
+            }
+            "USER" | "CURRENT_USER" => {
+                build_function(metadata, engine, &self.args, Box::new(User {}))
+            }
+            "FORMAT" | "DATE_FORMAT" | "TIME_FORMAT" | "TO_CHAR" => {
+                build_function(metadata, engine, &self.args, Box::new(Format {}))
+            }
+            "TO_TIMESTAMP" | "FROM_UNIXTIME" => {
+                build_function(metadata, engine, &self.args, Box::new(ToTimestamp {}))
+            }
+            "GREATEST" => build_function(metadata, engine, &self.args, Box::new(Greatest {})),
+            "IF" => build_function(metadata, engine, &self.args, Box::new(If {})),
+            "IFNULL" | "NULLIF" => {
+                build_function(metadata, engine, &self.args, Box::new(NullIf {}))
+            }
+            "LOWER" | "LCASE" => build_function(metadata, engine, &self.args, Box::new(Lower {})),
+            "LEAST" => build_function(metadata, engine, &self.args, Box::new(Least {})),
             _ => Err(CvsSqlError::Unsupported(format!("function {}", name))),
         }
     }
@@ -124,6 +159,7 @@ fn build_aggregator_function<D: Default + 'static>(
         name,
     }))
 }
+
 trait AggregateOperator {
     type Data: Default;
     fn aggregate(&self, so_far: &mut Self::Data, value: SmartReference<'_, Value>);
@@ -299,4 +335,509 @@ impl Projection for Wildcard {
 }
 fn wildcard_operator() -> Box<dyn Projection> {
     Box::new(Wildcard {})
+}
+
+trait Operator {
+    fn name(&self) -> &str;
+    fn min_args(&self) -> usize;
+    fn max_args(&self) -> Option<usize>;
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value>;
+}
+struct SimpleFunction {
+    arguments: Vec<Box<dyn Projection>>,
+    operator: Box<dyn Operator>,
+    name: String,
+}
+impl Projection for SimpleFunction {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
+        let mut args = vec![];
+        for a in &self.arguments {
+            args.push(a.get(row));
+        }
+        self.operator.get(&args)
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+fn build_function(
+    metadata: &Metadata,
+    engine: &Engine,
+    args: &FunctionArguments,
+    operator: Box<dyn Operator>,
+) -> Result<Box<dyn Projection>, CvsSqlError> {
+    let arguments = match &args {
+        FunctionArguments::List(lst) => {
+            if matches!(lst.duplicate_treatment, Some(DuplicateTreatment::Distinct)) {
+                return Err(CvsSqlError::Unsupported(format!(
+                    "Function {} with distinct argument",
+                    operator.name()
+                )));
+            }
+            if let Some(c) = lst.clauses.first() {
+                return Err(CvsSqlError::Unsupported(format!("{}", c)));
+            }
+            let mut args = vec![];
+            for a in &lst.args {
+                let a = match a {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
+                        e.convert_single(metadata, engine)?
+                    }
+                    _ => {
+                        return Err(CvsSqlError::Unsupported(format!(
+                            "{} as argment in function {}",
+                            a,
+                            operator.name()
+                        )));
+                    }
+                };
+                args.push(a);
+            }
+            args
+        }
+        FunctionArguments::Subquery(_) => {
+            return Err(CvsSqlError::Unsupported(
+                "function subquery arguments".into(),
+            ));
+        }
+        FunctionArguments::None => vec![],
+    };
+    if arguments.len() < operator.min_args() {
+        return Err(CvsSqlError::Unsupported(format!(
+            "Function {} with {} argumnets or less",
+            operator.name(),
+            arguments.len()
+        )));
+    }
+    if let Some(max) = operator.max_args() {
+        if arguments.len() > max {
+            return Err(CvsSqlError::Unsupported(format!(
+                "Function {} with {} argumnets or more",
+                operator.name(),
+                arguments.len()
+            )));
+        }
+    }
+    let name = format!(
+        "{}({})",
+        operator.name(),
+        arguments.iter().map(|f| f.name()).join(", ")
+    );
+
+    Ok(Box::new(SimpleFunction {
+        arguments,
+        operator,
+        name,
+    }))
+}
+
+struct Abs {}
+impl Operator for Abs {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        match args.first() {
+            Some(val) => match val.deref() {
+                Value::Number(num) => Value::Number(num.abs()).into(),
+                _ => Value::Empty.into(),
+            },
+            _ => Value::Empty.into(),
+        }
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "ABS"
+    }
+}
+
+struct Ascii {}
+impl Operator for Ascii {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let val = match args.first() {
+            Some(val) => match val.deref() {
+                Value::Str(str) => match str.chars().next() {
+                    None => Value::Empty,
+                    Some(l) => Value::Number((l as u32).into()),
+                },
+                _ => Value::Empty,
+            },
+            _ => Value::Empty,
+        };
+        val.into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "ASCII"
+    }
+}
+
+struct Chr {}
+impl Operator for Chr {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let val = match args.first() {
+            Some(val) => match val.deref() {
+                Value::Number(str) => match str.to_u32() {
+                    None => Value::Empty,
+                    Some(l) => match char::from_u32(l) {
+                        None => Value::Empty,
+                        Some(c) => Value::Str(c.to_string()),
+                    },
+                },
+                _ => Value::Empty,
+            },
+            _ => Value::Empty,
+        };
+        val.into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "CHR"
+    }
+}
+
+struct Length {}
+impl Operator for Length {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let val = match args.first() {
+            Some(val) => match val.deref() {
+                Value::Str(str) => match BigDecimal::from_usize(str.len()) {
+                    None => Value::Empty,
+                    Some(num) => Value::Number(num),
+                },
+                _ => Value::Empty,
+            },
+            _ => Value::Empty,
+        };
+        val.into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "LENGTH"
+    }
+}
+
+struct Coalece {}
+impl Operator for Coalece {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        for a in args.iter() {
+            if !a.is_empty() {
+                return a.deref().clone().into();
+            }
+        }
+        Value::Empty.into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        None
+    }
+    fn min_args(&self) -> usize {
+        0
+    }
+    fn name(&self) -> &str {
+        "COALESCE"
+    }
+}
+
+struct Concat {}
+impl Operator for Concat {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let str = args.iter().map(|f| f.to_string()).join("");
+        Value::Str(str).into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        None
+    }
+    fn min_args(&self) -> usize {
+        0
+    }
+    fn name(&self) -> &str {
+        "CONCAT"
+    }
+}
+
+struct ConcatWs {}
+impl Operator for ConcatWs {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(sep) = args.first() else {
+            return Value::Empty.into();
+        };
+        let sep = sep.to_string();
+        let str = args
+            .iter()
+            .skip(1)
+            .filter(|f| !f.is_empty())
+            .map(|f| f.to_string())
+            .join(sep.as_str());
+        Value::Str(str).into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        None
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "CONCAT_WS"
+    }
+}
+
+struct CurrentDate {}
+impl Operator for CurrentDate {
+    fn get<'a>(&'a self, _: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        Value::Date(Utc::now().naive_utc().date()).into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(0)
+    }
+    fn min_args(&self) -> usize {
+        0
+    }
+    fn name(&self) -> &str {
+        "CURRENT_DATE"
+    }
+}
+struct Now {}
+impl Operator for Now {
+    fn get<'a>(&'a self, _: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        Value::Timestamp(Utc::now().naive_utc()).into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(0)
+    }
+    fn min_args(&self) -> usize {
+        0
+    }
+    fn name(&self) -> &str {
+        "NOW"
+    }
+}
+struct User {}
+impl Operator for User {
+    fn get<'a>(&'a self, _: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        Value::Str(whoami::username()).into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(0)
+    }
+    fn min_args(&self) -> usize {
+        0
+    }
+    fn name(&self) -> &str {
+        "CURRENT_USER"
+    }
+}
+
+struct Format {}
+impl Operator for Format {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(value) = args.first() else {
+            return Value::Empty.into();
+        };
+        let Some(format) = args.get(1) else {
+            return Value::Empty.into();
+        };
+        let formatted = match (value.deref(), format.deref()) {
+            (Value::Date(date), Value::Str(format)) => date.format(format),
+            (Value::Timestamp(ts), Value::Str(format)) => ts.format(format),
+            _ => {
+                return Value::Empty.into();
+            }
+        };
+        let mut text = String::new();
+        if formatted.write_to(&mut text).is_err() {
+            return Value::Empty.into();
+        }
+
+        Value::Str(text).into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(2)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "FORMAT"
+    }
+}
+
+struct ToTimestamp {}
+impl Operator for ToTimestamp {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(time) = args.first() else {
+            return Value::Empty.into();
+        };
+        let Value::Number(time) = time.deref() else {
+            return Value::Empty.into();
+        };
+        let Some(time) = time.to_i64() else {
+            return Value::Empty.into();
+        };
+
+        let LocalResult::Single(time) = Utc.timestamp_opt(time, 0) else {
+            return Value::Empty.into();
+        };
+
+        Value::Timestamp(time.naive_utc()).into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "TO_TIMESTAMP"
+    }
+}
+
+struct Greatest {}
+impl Operator for Greatest {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let mut greatest = None;
+        for a in args.iter() {
+            match &greatest {
+                None => greatest = Some(a.deref().clone()),
+                Some(val) => {
+                    if a.deref() > val {
+                        greatest = Some(a.deref().clone());
+                    }
+                }
+            }
+        }
+        match greatest {
+            None => Value::Empty.into(),
+            Some(greatest) => greatest.into(),
+        }
+    }
+    fn max_args(&self) -> Option<usize> {
+        None
+    }
+    fn min_args(&self) -> usize {
+        0
+    }
+    fn name(&self) -> &str {
+        "GREATEST"
+    }
+}
+struct If {}
+impl Operator for If {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(condition) = args.first() else {
+            return Value::Empty.into();
+        };
+        let Value::Bool(condition) = condition.deref() else {
+            return Value::Empty.into();
+        };
+        let value = if *condition { args.get(1) } else { args.get(2) };
+        match value {
+            Some(v) => v.deref().clone().into(),
+            None => Value::Empty.into(),
+        }
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(3)
+    }
+    fn min_args(&self) -> usize {
+        3
+    }
+    fn name(&self) -> &str {
+        "IF"
+    }
+}
+struct NullIf {}
+impl Operator for NullIf {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(value_one) = args.first() else {
+            return Value::Empty.into();
+        };
+        let Some(value_two) = args.get(1) else {
+            return Value::Empty.into();
+        };
+        if *value_one != *value_two {
+            value_one.deref().clone().into()
+        } else {
+            Value::Empty.into()
+        }
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(2)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "NULLIF"
+    }
+}
+
+struct Lower {}
+impl Operator for Lower {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(text) = args.first() else {
+            return Value::Empty.into();
+        };
+        let Value::Str(text) = text.deref() else {
+            return Value::Empty.into();
+        };
+        Value::Str(text.to_lowercase()).into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "LOWER"
+    }
+}
+struct Least {}
+impl Operator for Least {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let mut least = None;
+        for a in args.iter() {
+            if !a.is_empty() {
+                match &least {
+                    None => least = Some(a.deref().clone()),
+                    Some(val) => {
+                        if a.deref() < val {
+                            least = Some(a.deref().clone());
+                        }
+                    }
+                }
+            }
+        }
+        match least {
+            None => Value::Empty.into(),
+            Some(least) => least.into(),
+        }
+    }
+    fn max_args(&self) -> Option<usize> {
+        None
+    }
+    fn min_args(&self) -> usize {
+        0
+    }
+    fn name(&self) -> &str {
+        "LEAST"
+    }
 }

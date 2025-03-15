@@ -1035,6 +1035,10 @@ impl SingleConvert for Expr {
                         let value = s.as_str().into();
                         Ok(Box::new(ValueProjection { value, name }))
                     }
+                    AstValue::Null => Ok(Box::new(ValueProjection {
+                        value: Value::Empty,
+                        name,
+                    })),
                     _ => Err(CvsSqlError::ToDo(format!("Select literal value {}", self))),
                 }
             }
