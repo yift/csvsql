@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Deref};
+use std::{collections::HashSet, ops::Deref, str::FromStr};
 
 use crate::{
     engine::Engine,
@@ -63,9 +63,8 @@ impl SingleConvert for Function {
             "CURRENT_DATE" => {
                 build_function(metadata, engine, &self.args, Box::new(CurrentDate {}))
             }
-            "NOW" | "CURRENT_TIME" | "CURRENT_TIMESTAMP" | "CURTIME" => {
-                build_function(metadata, engine, &self.args, Box::new(Now {}))
-            }
+            "NOW" | "CURRENT_TIME" | "CURRENT_TIMESTAMP" | "CURTIME" | "LOCALTIME"
+            | "LOCALTIMESTAMP" => build_function(metadata, engine, &self.args, Box::new(Now {})),
             "USER" | "CURRENT_USER" => {
                 build_function(metadata, engine, &self.args, Box::new(User {}))
             }
@@ -77,11 +76,16 @@ impl SingleConvert for Function {
             }
             "GREATEST" => build_function(metadata, engine, &self.args, Box::new(Greatest {})),
             "IF" => build_function(metadata, engine, &self.args, Box::new(If {})),
-            "IFNULL" | "NULLIF" => {
-                build_function(metadata, engine, &self.args, Box::new(NullIf {}))
-            }
+            "NULLIF" => build_function(metadata, engine, &self.args, Box::new(NullIf {})),
             "LOWER" | "LCASE" => build_function(metadata, engine, &self.args, Box::new(Lower {})),
             "LEAST" => build_function(metadata, engine, &self.args, Box::new(Least {})),
+            "LEFT" => build_function(metadata, engine, &self.args, Box::new(Left {})),
+            "LPAD" => build_function(metadata, engine, &self.args, Box::new(Lpad {})),
+            "LTRIM" => build_function(metadata, engine, &self.args, Box::new(Ltrim {})),
+            "SUBSTRING" | "MID" => {
+                build_function(metadata, engine, &self.args, Box::new(SubString {}))
+            }
+            "PI" => build_function(metadata, engine, &self.args, Box::new(Pi {})),
             _ => Err(CvsSqlError::Unsupported(format!("function {}", name))),
         }
     }
@@ -763,6 +767,7 @@ impl Operator for If {
         "IF"
     }
 }
+
 struct NullIf {}
 impl Operator for NullIf {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
@@ -839,5 +844,186 @@ impl Operator for Least {
     }
     fn name(&self) -> &str {
         "LEAST"
+    }
+}
+
+struct Left {}
+impl Operator for Left {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(text) = args.first() else {
+            return Value::Empty.into();
+        };
+        let Value::Str(text) = text.deref() else {
+            return Value::Empty.into();
+        };
+        let Some(length) = args.get(1) else {
+            return Value::Empty.into();
+        };
+        let Value::Number(length) = length.deref() else {
+            return Value::Empty.into();
+        };
+        let Some(length) = length.to_usize() else {
+            return Value::Empty.into();
+        };
+        if text.len() < length {
+            Value::Str(text.clone()).into()
+        } else {
+            Value::Str(text[0..length].to_string()).into()
+        }
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(2)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "LEFT"
+    }
+}
+
+struct Lpad {}
+impl Operator for Lpad {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(text) = args.first() else {
+            return Value::Empty.into();
+        };
+        let Value::Str(text) = text.deref() else {
+            return Value::Empty.into();
+        };
+        let Some(length) = args.get(1) else {
+            return Value::Empty.into();
+        };
+        let Value::Number(length) = length.deref() else {
+            return Value::Empty.into();
+        };
+        let Some(length) = length.to_usize() else {
+            return Value::Empty.into();
+        };
+        let Some(pad) = args.get(2) else {
+            return Value::Empty.into();
+        };
+        let Value::Str(pad) = pad.deref() else {
+            return Value::Empty.into();
+        };
+
+        if text.len() > length {
+            Value::Str(text[0..length].to_string()).into()
+        } else if pad.is_empty() {
+            Value::Str(text.clone()).into()
+        } else {
+            let mut str = String::new();
+            let mut chars = pad.chars().cycle();
+            for _ in 0..length - text.len() {
+                let chr = chars.next().unwrap();
+                str.push(chr);
+            }
+            str.push_str(text);
+            Value::Str(str).into()
+        }
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(3)
+    }
+    fn min_args(&self) -> usize {
+        3
+    }
+    fn name(&self) -> &str {
+        "LPAD"
+    }
+}
+
+struct Ltrim {}
+impl Operator for Ltrim {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(text) = args.first() else {
+            return Value::Empty.into();
+        };
+        let Value::Str(text) = text.deref() else {
+            return Value::Empty.into();
+        };
+        Value::Str(text.trim_start().into()).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "LTRIM"
+    }
+}
+
+struct SubString {}
+impl Operator for SubString {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let Some(text) = args.first() else {
+            return Value::Empty.into();
+        };
+        let Value::Str(text) = text.deref() else {
+            return Value::Empty.into();
+        };
+        let Some(start) = args.get(1) else {
+            return Value::Empty.into();
+        };
+        let Value::Number(start) = start.deref() else {
+            return Value::Empty.into();
+        };
+        let Some(start) = start.to_usize() else {
+            return Value::Empty.into();
+        };
+        if start > text.len() {
+            return Value::Str(String::new()).into();
+        }
+        let text = &text[start - 1..];
+        let length = match args.get(2) {
+            None => text.len(),
+            Some(length) => {
+                let Value::Number(length) = length.deref() else {
+                    return Value::Empty.into();
+                };
+                let Some(length) = length.to_usize() else {
+                    return Value::Empty.into();
+                };
+                length
+            }
+        };
+        if length > text.len() {
+            Value::Str(text.into())
+        } else {
+            Value::Str(text[..length].to_string())
+        }
+        .into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(3)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "SUBSTRING"
+    }
+}
+
+struct Pi {}
+impl Operator for Pi {
+    fn get<'a>(&'a self, _: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let pi = BigDecimal::from_str("3.1415926535897932384626433832795").unwrap();
+        Value::Number(pi).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(0)
+    }
+    fn min_args(&self) -> usize {
+        0
+    }
+    fn name(&self) -> &str {
+        "PI"
     }
 }
