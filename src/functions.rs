@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Deref, str::FromStr};
+use std::{ops::Deref, str::FromStr};
 
 use crate::{
     engine::Engine,
@@ -9,9 +9,9 @@ use crate::{
     util::SmartReference,
     value::Value,
 };
-use bigdecimal::BigDecimal;
 use bigdecimal::FromPrimitive;
 use bigdecimal::ToPrimitive;
+use bigdecimal::{BigDecimal, Zero};
 use chrono::{TimeZone, Utc, offset::LocalResult};
 use itertools::Itertools;
 use sqlparser::ast::{
@@ -91,11 +91,11 @@ impl SingleConvert for Function {
     }
 }
 
-fn build_aggregator_function<D: Default + 'static>(
+fn build_aggregator_function(
     metadata: &Metadata,
     engine: &Engine,
     args: &FunctionArguments,
-    operator: Box<dyn AggregateOperator<Data = D>>,
+    operator: Box<dyn AggregateOperator>,
 ) -> Result<Box<dyn Projection>, CvsSqlError> {
     let parent_metadata = match metadata {
         Metadata::Grouped { parent, this: _ } => parent,
@@ -165,42 +165,112 @@ fn build_aggregator_function<D: Default + 'static>(
 }
 
 trait AggregateOperator {
-    type Data: Default;
-    fn aggregate(&self, so_far: &mut Self::Data, value: SmartReference<'_, Value>);
-    fn to_value(&self, data: Self::Data) -> Value;
     fn name(&self) -> &str;
     fn support_wildcard_argument(&self) -> bool;
-    fn init(&self) -> Self::Data {
-        Self::Data::default()
+    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value;
+}
+impl AggregateOperator for Count {
+    fn name(&self) -> &str {
+        "COUNT"
+    }
+    fn support_wildcard_argument(&self) -> bool {
+        true
+    }
+    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+        let count = data.count();
+        Value::Number((count as u128).into())
     }
 }
 
-struct AggregatedFunction<D> {
+impl AggregateOperator for Avg {
+    fn name(&self) -> &str {
+        "AVG"
+    }
+
+    fn support_wildcard_argument(&self) -> bool {
+        false
+    }
+    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+        let mut total = BigDecimal::zero();
+        let mut count: u128 = 0;
+        for d in data {
+            if let Value::Number(num) = d {
+                count += 1;
+                total += num;
+            }
+        }
+        if count == 0 {
+            Value::Empty
+        } else {
+            Value::Number(total / count)
+        }
+    }
+}
+
+impl AggregateOperator for Sum {
+    fn name(&self) -> &str {
+        "SUM"
+    }
+    fn support_wildcard_argument(&self) -> bool {
+        false
+    }
+    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+        let total = data
+            .filter_map(|n| match n {
+                Value::Number(n) => Some(n),
+                _ => None,
+            })
+            .fold(BigDecimal::zero(), |a, b| a + b);
+        Value::Number(total)
+    }
+}
+impl AggregateOperator for Min {
+    fn name(&self) -> &str {
+        "MIN"
+    }
+    fn support_wildcard_argument(&self) -> bool {
+        false
+    }
+    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+        let min = data.min();
+        min.unwrap_or(Value::Empty)
+    }
+}
+
+impl AggregateOperator for Max {
+    fn name(&self) -> &str {
+        "MAX"
+    }
+    fn support_wildcard_argument(&self) -> bool {
+        false
+    }
+    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+        let min = data.max();
+        min.unwrap_or(Value::Empty)
+    }
+}
+
+struct AggregatedFunction {
     distinct: bool,
     argument: Box<dyn Projection>,
-    operator: Box<dyn AggregateOperator<Data = D>>,
+    operator: Box<dyn AggregateOperator>,
     name: String,
 }
 
-impl<D: Default> Projection for AggregatedFunction<D> {
+impl Projection for AggregatedFunction {
     fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
-        let mut agg = self.operator.init();
-        let mut found_items = HashSet::new();
-        for row in row.group_rows.iter() {
-            let value = self.argument.get(row);
-            if !value.is_empty() {
-                let to_add = if self.distinct {
-                    found_items.insert(value.clone())
-                } else {
-                    true
-                };
-                if to_add {
-                    self.operator.aggregate(&mut agg, value);
-                }
-            }
-        }
-
-        self.operator.to_value(agg).into()
+        let mut iter = row
+            .group_rows
+            .iter()
+            .map(|r| self.argument.get(r))
+            .map(|v| v.clone());
+        let value = if self.distinct {
+            let mut unique = iter.unique();
+            self.operator.aggreagate(&mut unique)
+        } else {
+            self.operator.aggreagate(&mut iter)
+        };
+        value.into()
     }
     fn name(&self) -> &str {
         &self.name
@@ -209,124 +279,12 @@ impl<D: Default> Projection for AggregatedFunction<D> {
 
 struct Count {}
 
-impl AggregateOperator for Count {
-    type Data = u128;
-    fn aggregate(&self, so_far: &mut Self::Data, _: SmartReference<'_, Value>) {
-        *so_far += 1;
-    }
-    fn to_value(&self, data: Self::Data) -> Value {
-        Value::Number(data.into())
-    }
-    fn name(&self) -> &str {
-        "COUNT"
-    }
-    fn support_wildcard_argument(&self) -> bool {
-        true
-    }
-}
-
 struct Avg {}
 
-#[derive(Default)]
-struct AvgCalc {
-    count: u128,
-    total: BigDecimal,
-}
-impl AggregateOperator for Avg {
-    type Data = AvgCalc;
-    fn aggregate(&self, so_far: &mut Self::Data, value: SmartReference<'_, Value>) {
-        if let Value::Number(num) = value.deref() {
-            so_far.count += 1;
-            so_far.total += num;
-        }
-    }
-    fn to_value(&self, data: Self::Data) -> Value {
-        if data.count == 0 {
-            Value::Empty
-        } else {
-            Value::Number(data.total / data.count)
-        }
-    }
-    fn name(&self) -> &str {
-        "AVG"
-    }
-
-    fn support_wildcard_argument(&self) -> bool {
-        false
-    }
-}
-
 struct Sum {}
-impl AggregateOperator for Sum {
-    type Data = BigDecimal;
-    fn aggregate(&self, so_far: &mut Self::Data, value: SmartReference<'_, Value>) {
-        if let Value::Number(num) = value.deref() {
-            *so_far += num
-        }
-    }
-    fn to_value(&self, data: Self::Data) -> Value {
-        Value::Number(data)
-    }
-    fn name(&self) -> &str {
-        "SUM"
-    }
-    fn support_wildcard_argument(&self) -> bool {
-        false
-    }
-}
 
 struct Max {}
-impl AggregateOperator for Max {
-    type Data = Option<Value>;
-    fn aggregate(&self, so_far: &mut Self::Data, value: SmartReference<'_, Value>) {
-        match so_far {
-            None => *so_far = Some(value.clone()),
-            Some(max_so_far) => {
-                if value.deref() > max_so_far {
-                    *so_far = Some(value.clone())
-                }
-            }
-        }
-    }
-    fn to_value(&self, data: Self::Data) -> Value {
-        match data {
-            None => Value::Empty,
-            Some(data) => data,
-        }
-    }
-    fn name(&self) -> &str {
-        "MAX"
-    }
-    fn support_wildcard_argument(&self) -> bool {
-        false
-    }
-}
 struct Min {}
-impl AggregateOperator for Min {
-    type Data = Option<Value>;
-    fn aggregate(&self, so_far: &mut Self::Data, value: SmartReference<'_, Value>) {
-        match so_far {
-            None => *so_far = Some(value.clone()),
-            Some(max_so_far) => {
-                if value.deref() < max_so_far {
-                    *so_far = Some(value.clone())
-                }
-            }
-        }
-    }
-    fn to_value(&self, data: Self::Data) -> Value {
-        match data {
-            None => Value::Empty,
-            Some(data) => data,
-        }
-    }
-    fn name(&self) -> &str {
-        "MIN"
-    }
-    fn support_wildcard_argument(&self) -> bool {
-        false
-    }
-}
 
 struct Wildcard {}
 impl Projection for Wildcard {
