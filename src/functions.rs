@@ -44,50 +44,52 @@ impl SingleConvert for Function {
         }
 
         let name = self.name.to_string().to_uppercase();
-        match name.as_str() {
-            "COUNT" => build_aggregator_function(metadata, engine, &self.args, Box::new(Count {})),
-            "AVG" => build_aggregator_function(metadata, engine, &self.args, Box::new(Avg {})),
-            "SUM" => build_aggregator_function(metadata, engine, &self.args, Box::new(Sum {})),
-            "MIN" => build_aggregator_function(metadata, engine, &self.args, Box::new(Min {})),
-            "MAX" => build_aggregator_function(metadata, engine, &self.args, Box::new(Max {})),
+        build_function_from_name(&name, metadata, engine, &self.args)
+    }
+}
+fn build_function_from_name(
+    name: &str,
+    metadata: &Metadata,
+    engine: &Engine,
+    args: &FunctionArguments,
+) -> Result<Box<dyn Projection>, CvsSqlError> {
+    match name {
+        "COUNT" => build_aggregator_function(metadata, engine, args, Box::new(Count {})),
+        "AVG" => build_aggregator_function(metadata, engine, args, Box::new(Avg {})),
+        "SUM" => build_aggregator_function(metadata, engine, args, Box::new(Sum {})),
+        "MIN" => build_aggregator_function(metadata, engine, args, Box::new(Min {})),
+        "MAX" => build_aggregator_function(metadata, engine, args, Box::new(Max {})),
 
-            "ABS" => build_function(metadata, engine, &self.args, Box::new(Abs {})),
-            "ASCII" => build_function(metadata, engine, &self.args, Box::new(Ascii {})),
-            "CHR" => build_function(metadata, engine, &self.args, Box::new(Chr {})),
-            "LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" => {
-                build_function(metadata, engine, &self.args, Box::new(Length {}))
-            }
-            "COALESCE" => build_function(metadata, engine, &self.args, Box::new(Coalece {})),
-            "CONCAT" => build_function(metadata, engine, &self.args, Box::new(Concat {})),
-            "CONCAT_WS" => build_function(metadata, engine, &self.args, Box::new(ConcatWs {})),
-            "CURRENT_DATE" => {
-                build_function(metadata, engine, &self.args, Box::new(CurrentDate {}))
-            }
-            "NOW" | "CURRENT_TIME" | "CURRENT_TIMESTAMP" | "CURTIME" | "LOCALTIME"
-            | "LOCALTIMESTAMP" => build_function(metadata, engine, &self.args, Box::new(Now {})),
-            "USER" | "CURRENT_USER" => {
-                build_function(metadata, engine, &self.args, Box::new(User {}))
-            }
-            "FORMAT" | "DATE_FORMAT" | "TIME_FORMAT" | "TO_CHAR" => {
-                build_function(metadata, engine, &self.args, Box::new(Format {}))
-            }
-            "TO_TIMESTAMP" | "FROM_UNIXTIME" => {
-                build_function(metadata, engine, &self.args, Box::new(ToTimestamp {}))
-            }
-            "GREATEST" => build_function(metadata, engine, &self.args, Box::new(Greatest {})),
-            "IF" => build_function(metadata, engine, &self.args, Box::new(If {})),
-            "NULLIF" => build_function(metadata, engine, &self.args, Box::new(NullIf {})),
-            "LOWER" | "LCASE" => build_function(metadata, engine, &self.args, Box::new(Lower {})),
-            "LEAST" => build_function(metadata, engine, &self.args, Box::new(Least {})),
-            "LEFT" => build_function(metadata, engine, &self.args, Box::new(Left {})),
-            "LPAD" => build_function(metadata, engine, &self.args, Box::new(Lpad {})),
-            "LTRIM" => build_function(metadata, engine, &self.args, Box::new(Ltrim {})),
-            "SUBSTRING" | "MID" => {
-                build_function(metadata, engine, &self.args, Box::new(SubString {}))
-            }
-            "PI" => build_function(metadata, engine, &self.args, Box::new(Pi {})),
-            _ => Err(CvsSqlError::Unsupported(format!("function {}", name))),
+        "ABS" => build_function(metadata, engine, args, Box::new(Abs {})),
+        "ASCII" => build_function(metadata, engine, args, Box::new(Ascii {})),
+        "CHR" => build_function(metadata, engine, args, Box::new(Chr {})),
+        "LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" => {
+            build_function(metadata, engine, args, Box::new(Length {}))
         }
+        "COALESCE" => build_function(metadata, engine, args, Box::new(Coalece {})),
+        "CONCAT" => build_function(metadata, engine, args, Box::new(Concat {})),
+        "CONCAT_WS" => build_function(metadata, engine, args, Box::new(ConcatWs {})),
+        "CURRENT_DATE" => build_function(metadata, engine, args, Box::new(CurrentDate {})),
+        "NOW" | "CURRENT_TIME" | "CURRENT_TIMESTAMP" | "CURTIME" | "LOCALTIME"
+        | "LOCALTIMESTAMP" => build_function(metadata, engine, args, Box::new(Now {})),
+        "USER" | "CURRENT_USER" => build_function(metadata, engine, args, Box::new(User {})),
+        "FORMAT" | "DATE_FORMAT" | "TIME_FORMAT" | "TO_CHAR" => {
+            build_function(metadata, engine, args, Box::new(Format {}))
+        }
+        "TO_TIMESTAMP" | "FROM_UNIXTIME" => {
+            build_function(metadata, engine, args, Box::new(ToTimestamp {}))
+        }
+        "GREATEST" => build_function(metadata, engine, args, Box::new(Greatest {})),
+        "IF" => build_function(metadata, engine, args, Box::new(If {})),
+        "NULLIF" => build_function(metadata, engine, args, Box::new(NullIf {})),
+        "LOWER" | "LCASE" => build_function(metadata, engine, args, Box::new(Lower {})),
+        "LEAST" => build_function(metadata, engine, args, Box::new(Least {})),
+        "LEFT" => build_function(metadata, engine, args, Box::new(Left {})),
+        "LPAD" => build_function(metadata, engine, args, Box::new(Lpad {})),
+        "LTRIM" => build_function(metadata, engine, args, Box::new(Ltrim {})),
+        "SUBSTRING" | "MID" => build_function(metadata, engine, args, Box::new(SubString {})),
+        "PI" => build_function(metadata, engine, args, Box::new(Pi {})),
+        _ => Err(CvsSqlError::Unsupported(format!("function {}", name))),
     }
 }
 
@@ -169,6 +171,22 @@ trait AggregateOperator {
     fn support_wildcard_argument(&self) -> bool;
     fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value;
 }
+
+trait Casters {
+    fn to_number(self) -> Option<BigDecimal>;
+}
+
+impl Casters for Value {
+    fn to_number(self) -> Option<BigDecimal> {
+        match self {
+            Value::Number(num) => Some(num),
+            _ => None,
+        }
+    }
+}
+
+struct Count {}
+
 impl AggregateOperator for Count {
     fn name(&self) -> &str {
         "COUNT"
@@ -181,6 +199,7 @@ impl AggregateOperator for Count {
         Value::Number((count as u128).into())
     }
 }
+struct Avg {}
 
 impl AggregateOperator for Avg {
     fn name(&self) -> &str {
@@ -193,11 +212,9 @@ impl AggregateOperator for Avg {
     fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let mut total = BigDecimal::zero();
         let mut count: u128 = 0;
-        for d in data {
-            if let Value::Number(num) = d {
-                count += 1;
-                total += num;
-            }
+        for num in data.filter_map(|f| f.to_number()) {
+            count += 1;
+            total += num;
         }
         if count == 0 {
             Value::Empty
@@ -206,6 +223,8 @@ impl AggregateOperator for Avg {
         }
     }
 }
+
+struct Sum {}
 
 impl AggregateOperator for Sum {
     fn name(&self) -> &str {
@@ -216,14 +235,13 @@ impl AggregateOperator for Sum {
     }
     fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let total = data
-            .filter_map(|n| match n {
-                Value::Number(n) => Some(n),
-                _ => None,
-            })
+            .filter_map(|f| f.to_number())
             .fold(BigDecimal::zero(), |a, b| a + b);
         Value::Number(total)
     }
 }
+struct Min {}
+
 impl AggregateOperator for Min {
     fn name(&self) -> &str {
         "MIN"
@@ -237,6 +255,7 @@ impl AggregateOperator for Min {
     }
 }
 
+struct Max {}
 impl AggregateOperator for Max {
     fn name(&self) -> &str {
         "MAX"
@@ -276,15 +295,6 @@ impl Projection for AggregatedFunction {
         &self.name
     }
 }
-
-struct Count {}
-
-struct Avg {}
-
-struct Sum {}
-
-struct Max {}
-struct Min {}
 
 struct Wildcard {}
 impl Projection for Wildcard {
@@ -393,17 +403,119 @@ fn build_function(
         name,
     }))
 }
+impl From<Option<BigDecimal>> for SmartReference<'_, Value> {
+    fn from(val: Option<BigDecimal>) -> Self {
+        match val {
+            None => Value::Empty,
+            Some(num) => Value::Number(num),
+        }
+        .into()
+    }
+}
+
+impl From<Option<u32>> for SmartReference<'_, Value> {
+    fn from(val: Option<u32>) -> Self {
+        match val {
+            None => Value::Empty,
+            Some(num) => Value::Number(num.into()),
+        }
+        .into()
+    }
+}
+
+impl From<Option<usize>> for SmartReference<'_, Value> {
+    fn from(val: Option<usize>) -> Self {
+        match val {
+            None => Value::Empty,
+            Some(num) => match BigDecimal::from_usize(num) {
+                Some(num) => Value::Number(num),
+                None => Value::Empty,
+            },
+        }
+        .into()
+    }
+}
+
+impl From<Option<String>> for SmartReference<'_, Value> {
+    fn from(val: Option<String>) -> Self {
+        match val {
+            None => Value::Empty,
+            Some(str) => Value::Str(str),
+        }
+        .into()
+    }
+}
+impl From<Option<&str>> for SmartReference<'_, Value> {
+    fn from(val: Option<&str>) -> Self {
+        match val {
+            None => Value::Empty,
+            Some(str) => Value::Str(str.to_string()),
+        }
+        .into()
+    }
+}
+
+trait Extractor {
+    fn as_num(&self) -> Option<&BigDecimal>;
+    fn as_string(&self) -> Option<&str>;
+    fn as_bool(&self) -> Option<&bool>;
+    fn as_u32(&self) -> Option<u32> {
+        self.as_num().and_then(|s| s.to_u32())
+    }
+    fn as_i64(&self) -> Option<i64> {
+        self.as_num().and_then(|s| s.to_i64())
+    }
+    fn as_usize(&self) -> Option<usize> {
+        self.as_num().and_then(|s| s.to_usize())
+    }
+}
+impl Extractor for Value {
+    fn as_num(&self) -> Option<&BigDecimal> {
+        match self {
+            Value::Number(num) => Some(num),
+            _ => None,
+        }
+    }
+    fn as_string(&self) -> Option<&str> {
+        match self {
+            Value::Str(str) => Some(str),
+            _ => None,
+        }
+    }
+    fn as_bool(&self) -> Option<&bool> {
+        match self {
+            Value::Bool(b) => Some(b),
+            _ => None,
+        }
+    }
+}
+impl<T: Extractor> Extractor for SmartReference<'_, T> {
+    fn as_num(&self) -> Option<&BigDecimal> {
+        self.deref().as_num()
+    }
+    fn as_string(&self) -> Option<&str> {
+        self.deref().as_string()
+    }
+    fn as_bool(&self) -> Option<&bool> {
+        self.deref().as_bool()
+    }
+}
+impl<T: Extractor> Extractor for Option<&T> {
+    fn as_num(&self) -> Option<&BigDecimal> {
+        self.and_then(|t| t.as_num())
+    }
+    fn as_string(&self) -> Option<&str> {
+        self.and_then(|s| s.as_string())
+    }
+    fn as_bool(&self) -> Option<&bool> {
+        self.and_then(|s| s.as_bool())
+    }
+}
 
 struct Abs {}
 impl Operator for Abs {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        match args.first() {
-            Some(val) => match val.deref() {
-                Value::Number(num) => Value::Number(num.abs()).into(),
-                _ => Value::Empty.into(),
-            },
-            _ => Value::Empty.into(),
-        }
+        args.first().as_num().map(|t| t.abs()).into()
     }
     fn max_args(&self) -> Option<usize> {
         Some(1)
@@ -419,17 +531,11 @@ impl Operator for Abs {
 struct Ascii {}
 impl Operator for Ascii {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let val = match args.first() {
-            Some(val) => match val.deref() {
-                Value::Str(str) => match str.chars().next() {
-                    None => Value::Empty,
-                    Some(l) => Value::Number((l as u32).into()),
-                },
-                _ => Value::Empty,
-            },
-            _ => Value::Empty,
-        };
-        val.into()
+        args.first()
+            .as_string()
+            .and_then(|s| s.chars().next())
+            .map(|i| i as u32)
+            .into()
     }
     fn max_args(&self) -> Option<usize> {
         Some(1)
@@ -445,20 +551,11 @@ impl Operator for Ascii {
 struct Chr {}
 impl Operator for Chr {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let val = match args.first() {
-            Some(val) => match val.deref() {
-                Value::Number(str) => match str.to_u32() {
-                    None => Value::Empty,
-                    Some(l) => match char::from_u32(l) {
-                        None => Value::Empty,
-                        Some(c) => Value::Str(c.to_string()),
-                    },
-                },
-                _ => Value::Empty,
-            },
-            _ => Value::Empty,
-        };
-        val.into()
+        args.first()
+            .as_u32()
+            .and_then(char::from_u32)
+            .map(|c| c.to_string())
+            .into()
     }
     fn max_args(&self) -> Option<usize> {
         Some(1)
@@ -474,17 +571,7 @@ impl Operator for Chr {
 struct Length {}
 impl Operator for Length {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let val = match args.first() {
-            Some(val) => match val.deref() {
-                Value::Str(str) => match BigDecimal::from_usize(str.len()) {
-                    None => Value::Empty,
-                    Some(num) => Value::Number(num),
-                },
-                _ => Value::Empty,
-            },
-            _ => Value::Empty,
-        };
-        val.into()
+        args.first().as_string().map(|s| s.len()).into()
     }
     fn max_args(&self) -> Option<usize> {
         Some(1)
@@ -613,12 +700,13 @@ impl Operator for Format {
         let Some(value) = args.first() else {
             return Value::Empty.into();
         };
-        let Some(format) = args.get(1) else {
+        let format = args.get(1);
+        let Some(format) = format.as_string() else {
             return Value::Empty.into();
         };
-        let formatted = match (value.deref(), format.deref()) {
-            (Value::Date(date), Value::Str(format)) => date.format(format),
-            (Value::Timestamp(ts), Value::Str(format)) => ts.format(format),
+        let formatted = match value.deref() {
+            Value::Date(date) => date.format(format),
+            Value::Timestamp(ts) => ts.format(format),
             _ => {
                 return Value::Empty.into();
             }
@@ -644,13 +732,7 @@ impl Operator for Format {
 struct ToTimestamp {}
 impl Operator for ToTimestamp {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let Some(time) = args.first() else {
-            return Value::Empty.into();
-        };
-        let Value::Number(time) = time.deref() else {
-            return Value::Empty.into();
-        };
-        let Some(time) = time.to_i64() else {
+        let Some(time) = args.first().as_i64() else {
             return Value::Empty.into();
         };
 
@@ -703,10 +785,8 @@ impl Operator for Greatest {
 struct If {}
 impl Operator for If {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let Some(condition) = args.first() else {
-            return Value::Empty.into();
-        };
-        let Value::Bool(condition) = condition.deref() else {
+        let first = args.first();
+        let Some(condition) = first.as_bool() else {
             return Value::Empty.into();
         };
         let value = if *condition { args.get(1) } else { args.get(2) };
@@ -755,13 +835,10 @@ impl Operator for NullIf {
 struct Lower {}
 impl Operator for Lower {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let Some(text) = args.first() else {
-            return Value::Empty.into();
-        };
-        let Value::Str(text) = text.deref() else {
-            return Value::Empty.into();
-        };
-        Value::Str(text.to_lowercase()).into()
+        args.first()
+            .and_then(|f| f.as_string())
+            .map(|f| f.to_lowercase())
+            .into()
     }
     fn max_args(&self) -> Option<usize> {
         Some(1)
@@ -808,23 +885,16 @@ impl Operator for Least {
 struct Left {}
 impl Operator for Left {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let Some(text) = args.first() else {
+        let text = args.first();
+        let Some(text) = text.as_string() else {
             return Value::Empty.into();
         };
-        let Value::Str(text) = text.deref() else {
-            return Value::Empty.into();
-        };
-        let Some(length) = args.get(1) else {
-            return Value::Empty.into();
-        };
-        let Value::Number(length) = length.deref() else {
-            return Value::Empty.into();
-        };
-        let Some(length) = length.to_usize() else {
+        let length = args.get(1);
+        let Some(length) = length.as_usize() else {
             return Value::Empty.into();
         };
         if text.len() < length {
-            Value::Str(text.clone()).into()
+            Value::Str(text.to_string()).into()
         } else {
             Value::Str(text[0..length].to_string()).into()
         }
@@ -843,32 +913,24 @@ impl Operator for Left {
 struct Lpad {}
 impl Operator for Lpad {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let Some(text) = args.first() else {
+        let text = args.first();
+        let Some(text) = text.as_string() else {
             return Value::Empty.into();
         };
-        let Value::Str(text) = text.deref() else {
+        let length = args.get(1);
+        let Some(length) = length.as_usize() else {
             return Value::Empty.into();
         };
-        let Some(length) = args.get(1) else {
-            return Value::Empty.into();
-        };
-        let Value::Number(length) = length.deref() else {
-            return Value::Empty.into();
-        };
-        let Some(length) = length.to_usize() else {
-            return Value::Empty.into();
-        };
-        let Some(pad) = args.get(2) else {
-            return Value::Empty.into();
-        };
-        let Value::Str(pad) = pad.deref() else {
+        let pad = args.get(2);
+
+        let Some(pad) = pad.as_string() else {
             return Value::Empty.into();
         };
 
         if text.len() > length {
             Value::Str(text[0..length].to_string()).into()
         } else if pad.is_empty() {
-            Value::Str(text.clone()).into()
+            Value::Str(text.to_string()).into()
         } else {
             let mut str = String::new();
             let mut chars = pad.chars().cycle();
@@ -895,13 +957,10 @@ impl Operator for Lpad {
 struct Ltrim {}
 impl Operator for Ltrim {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let Some(text) = args.first() else {
-            return Value::Empty.into();
-        };
-        let Value::Str(text) = text.deref() else {
-            return Value::Empty.into();
-        };
-        Value::Str(text.trim_start().into()).into()
+        args.first()
+            .and_then(|f| f.as_string())
+            .map(|f| f.trim_start())
+            .into()
     }
 
     fn max_args(&self) -> Option<usize> {
@@ -918,21 +977,16 @@ impl Operator for Ltrim {
 struct SubString {}
 impl Operator for SubString {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let Some(text) = args.first() else {
+        let text = args.first();
+        let Some(text) = text.as_string() else {
             return Value::Empty.into();
         };
-        let Value::Str(text) = text.deref() else {
+
+        let start = args.get(1);
+        let Some(start) = start.as_usize() else {
             return Value::Empty.into();
         };
-        let Some(start) = args.get(1) else {
-            return Value::Empty.into();
-        };
-        let Value::Number(start) = start.deref() else {
-            return Value::Empty.into();
-        };
-        let Some(start) = start.to_usize() else {
-            return Value::Empty.into();
-        };
+
         if start > text.len() {
             return Value::Str(String::new()).into();
         }
@@ -940,10 +994,7 @@ impl Operator for SubString {
         let length = match args.get(2) {
             None => text.len(),
             Some(length) => {
-                let Value::Number(length) = length.deref() else {
-                    return Value::Empty.into();
-                };
-                let Some(length) = length.to_usize() else {
+                let Some(length) = length.as_usize() else {
                     return Value::Empty.into();
                 };
                 length
