@@ -166,10 +166,20 @@ fn build_aggregator_function(
     }))
 }
 
+#[cfg(test)]
+struct AggregationExample<'a> {
+    name: &'a str,
+    data: Vec<&'a str>,
+    is_wildcard: bool,
+    is_distinct: bool,
+    expected_results: &'a str,
+}
 trait AggregateOperator {
     fn name(&self) -> &str;
     fn support_wildcard_argument(&self) -> bool;
     fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value;
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<AggregationExample<'a>>;
 }
 
 trait Casters {
@@ -198,7 +208,34 @@ impl AggregateOperator for Count {
         let count = data.count();
         Value::Number((count as u128).into())
     }
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<AggregationExample<'a>> {
+        vec![
+            AggregationExample {
+                name: "simple",
+                data: vec!["1", "2", "3", "4", "1"],
+                is_distinct: false,
+                is_wildcard: false,
+                expected_results: "5",
+            },
+            AggregationExample {
+                name: "wildcard",
+                data: vec!["1", "2", "3", "4", "1"],
+                is_distinct: false,
+                is_wildcard: true,
+                expected_results: "5",
+            },
+            AggregationExample {
+                name: "distinct",
+                data: vec!["1", "2", "3", "4", "1"],
+                is_distinct: true,
+                is_wildcard: false,
+                expected_results: "4",
+            },
+        ]
+    }
 }
+
 struct Avg {}
 
 impl AggregateOperator for Avg {
@@ -222,6 +259,40 @@ impl AggregateOperator for Avg {
             Value::Number(total / count)
         }
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<AggregationExample<'a>> {
+        vec![
+            AggregationExample {
+                name: "simple",
+                is_distinct: false,
+                is_wildcard: false,
+                data: vec!["5", "11", "11", "1"],
+                expected_results: "7",
+            },
+            AggregationExample {
+                name: "distinct",
+                is_distinct: true,
+                is_wildcard: false,
+                data: vec!["30", "12", "12", "9"],
+                expected_results: "17",
+            },
+            AggregationExample {
+                name: "not_only_numbers",
+                is_distinct: true,
+                is_wildcard: false,
+                data: vec!["10", "", "nop", "12"],
+                expected_results: "11",
+            },
+            AggregationExample {
+                name: "no_numbers",
+                is_distinct: true,
+                is_wildcard: false,
+                data: vec!["a", "", "nop", ""],
+                expected_results: "",
+            },
+        ]
+    }
 }
 
 struct Sum {}
@@ -239,6 +310,39 @@ impl AggregateOperator for Sum {
             .fold(BigDecimal::zero(), |a, b| a + b);
         Value::Number(total)
     }
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<AggregationExample<'a>> {
+        vec![
+            AggregationExample {
+                name: "simple",
+                is_distinct: false,
+                is_wildcard: false,
+                data: vec!["1", "1", "2", "3"],
+                expected_results: "7",
+            },
+            AggregationExample {
+                name: "distinct",
+                is_distinct: true,
+                is_wildcard: false,
+                data: vec!["1", "1", "2", "3"],
+                expected_results: "6",
+            },
+            AggregationExample {
+                name: "not_only_numbers",
+                is_distinct: true,
+                is_wildcard: false,
+                data: vec!["10", "", "nop", "12"],
+                expected_results: "22",
+            },
+            AggregationExample {
+                name: "no_numbers",
+                is_distinct: true,
+                is_wildcard: false,
+                data: vec!["a", "", "nop", ""],
+                expected_results: "0",
+            },
+        ]
+    }
 }
 struct Min {}
 
@@ -253,6 +357,26 @@ impl AggregateOperator for Min {
         let min = data.min();
         min.unwrap_or(Value::Empty)
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<AggregationExample<'a>> {
+        vec![
+            AggregationExample {
+                name: "numbers",
+                is_distinct: false,
+                is_wildcard: false,
+                data: vec!["1", "1", "2", "3"],
+                expected_results: "1",
+            },
+            AggregationExample {
+                name: "letters",
+                is_distinct: true,
+                is_wildcard: false,
+                data: vec!["e", "b", "d", "q"],
+                expected_results: "b",
+            },
+        ]
+    }
 }
 
 struct Max {}
@@ -266,6 +390,25 @@ impl AggregateOperator for Max {
     fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let min = data.max();
         min.unwrap_or(Value::Empty)
+    }
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<AggregationExample<'a>> {
+        vec![
+            AggregationExample {
+                name: "numbers",
+                is_distinct: false,
+                is_wildcard: false,
+                data: vec!["1", "1", "2", "3"],
+                expected_results: "3",
+            },
+            AggregationExample {
+                name: "letters",
+                is_distinct: true,
+                is_wildcard: false,
+                data: vec!["e", "b", "d", "q"],
+                expected_results: "q",
+            },
+        ]
     }
 }
 
@@ -309,11 +452,125 @@ fn wildcard_operator() -> Box<dyn Projection> {
     Box::new(Wildcard {})
 }
 
+#[cfg(test)]
+mod test_aggregations {
+    use std::fs::{self, OpenOptions};
+
+    use crate::{args::Args, engine::Engine, error::CvsSqlError, results::Column};
+    use std::io::Write;
+
+    use super::{AggregateOperator, AggregationExample, Avg, Count, Max, Min, Sum};
+
+    fn test_agg(operator: &impl AggregateOperator) -> Result<(), CvsSqlError> {
+        let dir = format!("./target/function_tests/{}", operator.name().to_lowercase());
+        println!("testing: {}", operator.name());
+        fs::remove_dir_all(&dir).ok();
+        fs::create_dir_all(&dir)?;
+        for example in operator.examples() {
+            test_agg_with_example(operator, &example)?;
+        }
+        fs::remove_dir_all(&dir).ok();
+
+        Ok(())
+    }
+
+    fn test_agg_with_example<'a>(
+        operator: &impl AggregateOperator,
+        example: &AggregationExample<'a>,
+    ) -> Result<(), CvsSqlError> {
+        println!("testing: {} with {}", operator.name(), example.name);
+        let dir = format!("./target/function_tests/{}", operator.name().to_lowercase());
+        let file = format!("{}/{}.csv", dir, example.name);
+        let mut writer = OpenOptions::new().write(true).create(true).open(&file)?;
+        writeln!(writer, "row")?;
+        for data in &example.data {
+            writeln!(writer, "{}", data)?;
+        }
+
+        let table_name = format!(
+            "target.function_tests.{}.{}",
+            operator.name().to_lowercase(),
+            &example.name
+        );
+        let selector = if example.is_distinct {
+            "DISTINCT row"
+        } else if example.is_wildcard {
+            "*"
+        } else {
+            "row"
+        };
+
+        let sql = format!(
+            "SELECT {}({}) FROM {} GROUP BY 1\n",
+            operator.name(),
+            selector,
+            table_name
+        );
+
+        let args = Args {
+            command: None,
+            home: None,
+            first_line_as_name: true,
+        };
+        let engine = Engine::try_from(&args)?;
+
+        let results = engine.execute_commands(&sql)?;
+
+        fs::remove_file(file)?;
+
+        let col = Column::from_index(0);
+        let result = results
+            .first()
+            .and_then(|d| d.data.iter().next())
+            .map(|d| d.get(&col));
+        let expected_results = example.expected_results.into();
+        assert_eq!(result, Some(&expected_results));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_count() -> Result<(), CvsSqlError> {
+        test_agg(&Count {})
+    }
+
+    #[test]
+    fn test_sum() -> Result<(), CvsSqlError> {
+        test_agg(&Sum {})
+    }
+
+    #[test]
+    fn test_avg() -> Result<(), CvsSqlError> {
+        test_agg(&Avg {})
+    }
+
+    #[test]
+    fn test_min() -> Result<(), CvsSqlError> {
+        test_agg(&Min {})
+    }
+
+    #[test]
+    fn test_max() -> Result<(), CvsSqlError> {
+        test_agg(&Max {})
+    }
+}
+
+#[cfg(test)]
+struct FunctionExample<'a> {
+    name: &'a str,
+    arguments: Vec<&'a str>,
+    expected_results: &'a str,
+}
+
 trait Operator {
     fn name(&self) -> &str;
     fn min_args(&self) -> usize;
     fn max_args(&self) -> Option<usize>;
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value>;
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![]
+    }
 }
 struct SimpleFunction {
     arguments: Vec<Box<dyn Projection>>,
@@ -526,6 +783,27 @@ impl Operator for Abs {
     fn name(&self) -> &str {
         "ABS"
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "positive_number",
+                arguments: vec!["11.44"],
+                expected_results: "11.44",
+            },
+            FunctionExample {
+                name: "negative_number",
+                arguments: vec!["-0.44"],
+                expected_results: "0.44",
+            },
+            FunctionExample {
+                name: "nan",
+                arguments: vec!["test"],
+                expected_results: "",
+            },
+        ]
+    }
 }
 
 struct Ascii {}
@@ -545,6 +823,27 @@ impl Operator for Ascii {
     }
     fn name(&self) -> &str {
         "ASCII"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["a"],
+                expected_results: "97",
+            },
+            FunctionExample {
+                name: "word",
+                arguments: vec!["abc"],
+                expected_results: "97",
+            },
+            FunctionExample {
+                name: "number",
+                arguments: vec!["100"],
+                expected_results: "",
+            },
+        ]
     }
 }
 
@@ -566,6 +865,32 @@ impl Operator for Chr {
     fn name(&self) -> &str {
         "CHR"
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["97"],
+                expected_results: "a",
+            },
+            FunctionExample {
+                name: "neg",
+                arguments: vec!["-100"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "float",
+                arguments: vec!["97.1"],
+                expected_results: "a",
+            },
+            FunctionExample {
+                name: "str",
+                arguments: vec!["abc"],
+                expected_results: "",
+            },
+        ]
+    }
 }
 
 struct Length {}
@@ -581,6 +906,22 @@ impl Operator for Length {
     }
     fn name(&self) -> &str {
         "LENGTH"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["hello"],
+                expected_results: "5",
+            },
+            FunctionExample {
+                name: "number",
+                arguments: vec!["-100"],
+                expected_results: "",
+            },
+        ]
     }
 }
 
@@ -603,6 +944,32 @@ impl Operator for Coalece {
     fn name(&self) -> &str {
         "COALESCE"
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["", "", "5", "6"],
+                expected_results: "5",
+            },
+            FunctionExample {
+                name: "nope",
+                arguments: vec!["", "", "", "", ""],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "first",
+                arguments: vec!["a", "b"],
+                expected_results: "a",
+            },
+            FunctionExample {
+                name: "empty",
+                arguments: vec![],
+                expected_results: "",
+            },
+        ]
+    }
 }
 
 struct Concat {}
@@ -619,6 +986,22 @@ impl Operator for Concat {
     }
     fn name(&self) -> &str {
         "CONCAT"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["a", "b", "cd", "e"],
+                expected_results: "abcde",
+            },
+            FunctionExample {
+                name: "with_nums",
+                arguments: vec!["a", "1", "b"],
+                expected_results: "a1b",
+            },
+        ]
     }
 }
 
@@ -645,6 +1028,15 @@ impl Operator for ConcatWs {
     }
     fn name(&self) -> &str {
         "CONCAT_WS"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![FunctionExample {
+            name: "simple",
+            arguments: vec!["|", "a", "b", "cd", "e"],
+            expected_results: "a|b|cd|e",
+        }]
     }
 }
 
@@ -727,6 +1119,37 @@ impl Operator for Format {
     fn name(&self) -> &str {
         "FORMAT"
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple_date",
+                arguments: vec!["2024-11-23", "%d/%m/%Y"],
+                expected_results: "23/11/2024",
+            },
+            FunctionExample {
+                name: "simple_timestmp",
+                arguments: vec!["2024-11-23 16:20:21.003", "%v %r"],
+                expected_results: "23-Nov-2024 04:20:21 PM",
+            },
+            FunctionExample {
+                name: "format_as_number",
+                arguments: vec!["2024-11-23 16:20:21.003", "123"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "invalid_format",
+                arguments: vec!["2024-11-23 16:20:21.003", "%Q"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "numeric_value",
+                arguments: vec!["3", "%v %r"],
+                expected_results: "",
+            },
+        ]
+    }
 }
 
 struct ToTimestamp {}
@@ -750,6 +1173,22 @@ impl Operator for ToTimestamp {
     }
     fn name(&self) -> &str {
         "TO_TIMESTAMP"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "should_work",
+                arguments: vec!["1400234525"],
+                expected_results: "2014-05-16 10:02:05",
+            },
+            FunctionExample {
+                name: "nan",
+                arguments: vec!["test"],
+                expected_results: "",
+            },
+        ]
     }
 }
 
@@ -781,6 +1220,22 @@ impl Operator for Greatest {
     fn name(&self) -> &str {
         "GREATEST"
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "greatest",
+                arguments: vec!["10", "400040", "1044", "-134522352"],
+                expected_results: "400040",
+            },
+            FunctionExample {
+                name: "empty",
+                arguments: vec![],
+                expected_results: "",
+            },
+        ]
+    }
 }
 struct If {}
 impl Operator for If {
@@ -803,6 +1258,27 @@ impl Operator for If {
     }
     fn name(&self) -> &str {
         "IF"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "true",
+                arguments: vec!["TRUE", "100", "-100"],
+                expected_results: "100",
+            },
+            FunctionExample {
+                name: "false",
+                arguments: vec!["FALSE", "100", "-100"],
+                expected_results: "-100",
+            },
+            FunctionExample {
+                name: "not_bool",
+                arguments: vec!["test", "100", "-100"],
+                expected_results: "",
+            },
+        ]
     }
 }
 
@@ -830,6 +1306,22 @@ impl Operator for NullIf {
     fn name(&self) -> &str {
         "NULLIF"
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "eq",
+                arguments: vec!["hello", "hello"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "neq",
+                arguments: vec!["hello", "world"],
+                expected_results: "hello",
+            },
+        ]
+    }
 }
 
 struct Lower {}
@@ -848,6 +1340,22 @@ impl Operator for Lower {
     }
     fn name(&self) -> &str {
         "LOWER"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "str",
+                arguments: vec!["HeLLo"],
+                expected_results: "hello",
+            },
+            FunctionExample {
+                name: "number",
+                arguments: vec!["123"],
+                expected_results: "",
+            },
+        ]
     }
 }
 struct Least {}
@@ -880,6 +1388,22 @@ impl Operator for Least {
     fn name(&self) -> &str {
         "LEAST"
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "least",
+                arguments: vec!["10", "400040", "1044", "-4", "-1"],
+                expected_results: "-4",
+            },
+            FunctionExample {
+                name: "empty",
+                arguments: vec![],
+                expected_results: "",
+            },
+        ]
+    }
 }
 
 struct Left {}
@@ -907,6 +1431,37 @@ impl Operator for Left {
     }
     fn name(&self) -> &str {
         "LEFT"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["test", "2"],
+                expected_results: "te",
+            },
+            FunctionExample {
+                name: "exact",
+                arguments: vec!["test", "4"],
+                expected_results: "test",
+            },
+            FunctionExample {
+                name: "more",
+                arguments: vec!["test", "12"],
+                expected_results: "test",
+            },
+            FunctionExample {
+                name: "nan",
+                arguments: vec!["test", "five"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_text",
+                arguments: vec!["10", "10"],
+                expected_results: "",
+            },
+        ]
     }
 }
 
@@ -952,6 +1507,57 @@ impl Operator for Lpad {
     fn name(&self) -> &str {
         "LPAD"
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["text", "10", "pad"],
+                expected_results: "padpadtext",
+            },
+            FunctionExample {
+                name: "more",
+                arguments: vec!["text", "12", "pad"],
+                expected_results: "padpadpatext",
+            },
+            FunctionExample {
+                name: "less",
+                arguments: vec!["text", "3", "pad"],
+                expected_results: "tex",
+            },
+            FunctionExample {
+                name: "exact",
+                arguments: vec!["text", "4", "pad"],
+                expected_results: "text",
+            },
+            FunctionExample {
+                name: "negative",
+                arguments: vec!["text", "-122", "pad"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "non_text",
+                arguments: vec!["12", "10", "pad"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "non_number",
+                arguments: vec!["text", "me", "pad"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_pad",
+                arguments: vec!["text", "10", "2"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "empty_pad",
+                arguments: vec!["text", "10", "2"],
+                expected_results: "",
+            },
+        ]
+    }
 }
 
 struct Ltrim {}
@@ -971,6 +1577,22 @@ impl Operator for Ltrim {
     }
     fn name(&self) -> &str {
         "LTRIM"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["  hello"],
+                expected_results: "hello",
+            },
+            FunctionExample {
+                name: "not_text",
+                arguments: vec!["12"],
+                expected_results: "",
+            },
+        ]
     }
 }
 
@@ -1017,6 +1639,72 @@ impl Operator for SubString {
     fn name(&self) -> &str {
         "SUBSTRING"
     }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "start_only",
+                arguments: vec!["abcdef", "3"],
+                expected_results: "cdef",
+            },
+            FunctionExample {
+                name: "start_only_negative",
+                arguments: vec!["abcdef", "-3"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "start_only_zero",
+                arguments: vec!["abcdef", "0"],
+                expected_results: "abcdef",
+            },
+            FunctionExample {
+                name: "start_only_one",
+                arguments: vec!["abcdef", "1"],
+                expected_results: "abcdef",
+            },
+            FunctionExample {
+                name: "start_only_large",
+                arguments: vec!["abcdef", "20"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "start_only_not_a_number",
+                arguments: vec!["abcdef", "test"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "start_only_not_text",
+                arguments: vec!["204234", "2"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "start_and_length",
+                arguments: vec!["abcdef", "3", "2"],
+                expected_results: "cd",
+            },
+            FunctionExample {
+                name: "start_and_length_too_big",
+                arguments: vec!["abcdef", "3", "20"],
+                expected_results: "cdef",
+            },
+            FunctionExample {
+                name: "start_and_length_exact",
+                arguments: vec!["abcdef", "3", "4"],
+                expected_results: "cdef",
+            },
+            FunctionExample {
+                name: "start_and_length_negative",
+                arguments: vec!["abcdef", "3", "-4"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "start_and_length_text",
+                arguments: vec!["abcdef", "3", "test"],
+                expected_results: "",
+            },
+        ]
+    }
 }
 
 struct Pi {}
@@ -1034,5 +1722,240 @@ impl Operator for Pi {
     }
     fn name(&self) -> &str {
         "PI"
+    }
+}
+
+#[cfg(test)]
+mod tests_functions {
+    use std::fs::{self, OpenOptions};
+
+    use bigdecimal::ToPrimitive;
+    use chrono::{TimeDelta, Utc};
+    use itertools::Itertools;
+
+    use crate::{args::Args, engine::Engine, error::CvsSqlError, results::Column, value::Value};
+    use std::io::Write;
+
+    use super::{
+        Abs, Ascii, Chr, Coalece, Concat, ConcatWs, CurrentDate, Format, Greatest, If, Least, Left,
+        Length, Lower, Lpad, Ltrim, Now, NullIf, Operator, Pi, SubString, ToTimestamp, User,
+    };
+
+    fn test_func(operator: &impl Operator) -> Result<(), CvsSqlError> {
+        let dir = format!("./target/function_tests/{}", operator.name().to_lowercase());
+        println!("testing: {}", operator.name());
+        fs::remove_dir_all(&dir).ok();
+        for example in operator.examples() {
+            test_with_details(operator, &example.name, &example.arguments, |r| {
+                let expected_results = example.expected_results.into();
+                if r == Some(&expected_results) {
+                    true
+                } else {
+                    println!(
+                        "Function {} example {}, results: {:?}, expecting: [{}]",
+                        operator.name(),
+                        &example.name,
+                        r,
+                        example.expected_results
+                    );
+                    false
+                }
+            })?;
+        }
+        fs::remove_dir_all(&dir).ok();
+
+        Ok(())
+    }
+
+    fn test_with_details<F>(
+        operator: &impl Operator,
+        name: &str,
+        arguments: &[&str],
+        verify_results: F,
+    ) -> Result<(), CvsSqlError>
+    where
+        F: FnOnce(Option<&Value>) -> bool,
+    {
+        println!("testing: {} with {}", operator.name(), name);
+        let dir = format!("./target/function_tests/{}", operator.name().to_lowercase());
+        fs::create_dir_all(&dir)?;
+        let file = format!("{}/{}.csv", dir, name);
+        let mut writer = OpenOptions::new().write(true).create(true).open(&file)?;
+        let header = ('a'..'z')
+            .take(arguments.len())
+            .map(|c| format!("{}", c))
+            .join(",");
+        writeln!(writer, "{},name", header)?;
+        let line = arguments.join(",");
+        writeln!(writer, "{},{}", line, name)?;
+
+        let table_name = format!(
+            "target.function_tests.{}.{}",
+            operator.name().to_lowercase(),
+            name
+        );
+        let sql = format!(
+            "SELECT {}({}) FROM {}\n",
+            operator.name(),
+            header,
+            table_name
+        );
+
+        let args = Args {
+            command: None,
+            home: None,
+            first_line_as_name: true,
+        };
+        let engine = Engine::try_from(&args)?;
+
+        let results = engine.execute_commands(&sql)?;
+
+        fs::remove_file(file)?;
+
+        let col = Column::from_index(0);
+        let result = results
+            .first()
+            .and_then(|d| d.data.iter().next())
+            .map(|d| d.get(&col));
+
+        assert_eq!(true, verify_results(result));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_abs() -> Result<(), CvsSqlError> {
+        test_func(&Abs {})
+    }
+
+    #[test]
+    fn test_ascii() -> Result<(), CvsSqlError> {
+        test_func(&Ascii {})
+    }
+
+    #[test]
+    fn test_chr() -> Result<(), CvsSqlError> {
+        test_func(&Chr {})
+    }
+
+    #[test]
+    fn test_length() -> Result<(), CvsSqlError> {
+        test_func(&Length {})
+    }
+
+    #[test]
+    fn test_coalece() -> Result<(), CvsSqlError> {
+        test_func(&Coalece {})
+    }
+
+    #[test]
+    fn test_concat() -> Result<(), CvsSqlError> {
+        test_func(&Concat {})
+    }
+
+    #[test]
+    fn test_concat_ws() -> Result<(), CvsSqlError> {
+        test_func(&ConcatWs {})
+    }
+
+    #[test]
+    fn test_current_date() -> Result<(), CvsSqlError> {
+        test_with_details(&CurrentDate {}, "current_date", &vec![], |r| match r {
+            Some(Value::Date(dt)) => {
+                let now = Utc::now().naive_utc().date();
+                let to = now.succ_opt().unwrap();
+                let from = now.pred_opt().unwrap();
+
+                *dt >= from && *dt <= to
+            }
+            _ => false,
+        })
+    }
+
+    #[test]
+    fn test_now() -> Result<(), CvsSqlError> {
+        test_with_details(&Now {}, "now", &vec![], |r| match r {
+            Some(Value::Timestamp(dt)) => {
+                let now = Utc::now().naive_utc();
+                let to = now.checked_add_signed(TimeDelta::seconds(10)).unwrap();
+                let from = now.checked_add_signed(TimeDelta::seconds(-10)).unwrap();
+
+                *dt >= from && *dt <= to
+            }
+            _ => false,
+        })
+    }
+
+    #[test]
+    fn test_current_user() -> Result<(), CvsSqlError> {
+        test_with_details(&User {}, "user", &vec![], |r| match r {
+            Some(Value::Str(user)) => *user == whoami::username(),
+            _ => false,
+        })
+    }
+
+    #[test]
+    fn test_format() -> Result<(), CvsSqlError> {
+        test_func(&Format {})
+    }
+
+    #[test]
+    fn test_to_timestamp() -> Result<(), CvsSqlError> {
+        test_func(&ToTimestamp {})
+    }
+
+    #[test]
+    fn test_greatest() -> Result<(), CvsSqlError> {
+        test_func(&Greatest {})
+    }
+
+    #[test]
+    fn test_if() -> Result<(), CvsSqlError> {
+        test_func(&If {})
+    }
+
+    #[test]
+    fn test_null_if() -> Result<(), CvsSqlError> {
+        test_func(&NullIf {})
+    }
+
+    #[test]
+    fn test_lower() -> Result<(), CvsSqlError> {
+        test_func(&Lower {})
+    }
+
+    #[test]
+    fn test_least() -> Result<(), CvsSqlError> {
+        test_func(&Least {})
+    }
+
+    #[test]
+    fn test_left() -> Result<(), CvsSqlError> {
+        test_func(&Left {})
+    }
+
+    #[test]
+    fn test_lpad() -> Result<(), CvsSqlError> {
+        test_func(&Lpad {})
+    }
+
+    #[test]
+    fn test_ltrim() -> Result<(), CvsSqlError> {
+        test_func(&Ltrim {})
+    }
+
+    #[test]
+    fn test_substr() -> Result<(), CvsSqlError> {
+        test_func(&SubString {})
+    }
+
+    #[test]
+    fn test_pi() -> Result<(), CvsSqlError> {
+        test_with_details(&Pi {}, "pi", &vec![], |r| match r {
+            Some(Value::Number(num)) => {
+                num.to_f64().unwrap() > 3.14 && num.to_f64().unwrap() < 3.15
+            }
+            _ => false,
+        })
     }
 }
