@@ -90,6 +90,7 @@ fn build_function_from_name(
         "LTRIM" => build_function(metadata, engine, args, Box::new(Ltrim {})),
         "SUBSTRING" | "MID" => build_function(metadata, engine, args, Box::new(SubString {})),
         "PI" => build_function(metadata, engine, args, Box::new(Pi {})),
+        "POSITION" | "LOCATE" => build_function(metadata, engine, args, Box::new(Position {})),
         _ => Err(CvsSqlError::Unsupported(format!("function {}", name))),
     }
 }
@@ -718,6 +719,15 @@ impl From<Option<usize>> for SmartReference<'_, Value> {
                 Some(num) => Value::Number(num),
                 None => Value::Empty,
             },
+        }
+        .into()
+    }
+}
+impl From<usize> for SmartReference<'_, Value> {
+    fn from(val: usize) -> Self {
+        match BigDecimal::from_usize(val) {
+            Some(num) => Value::Number(num),
+            None => Value::Empty,
         }
         .into()
     }
@@ -1626,6 +1636,88 @@ impl Operator for Ltrim {
     }
 }
 
+struct Position {}
+impl Operator for Position {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let sub = args.first();
+        let Some(sub) = sub.as_string() else {
+            return Value::Empty.into();
+        };
+        let str = args.get(1);
+        let Some(str) = str.as_string() else {
+            return Value::Empty.into();
+        };
+        let start = match args.get(2) {
+            None => 0,
+            Some(val) => {
+                let Some(mut start) = val.as_usize() else {
+                    return Value::Empty.into();
+                };
+                if start == 0 {
+                    start = 1;
+                }
+                if start > str.len() {
+                    return 0.into();
+                }
+                start - 1
+            }
+        };
+        let position = str[start..].find(sub).map(|f| f + 1).unwrap_or_default();
+        (position + start).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(3)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "POSITION"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["bar", "foobarbar"],
+                expected_results: "4",
+            },
+            FunctionExample {
+                name: "nop",
+                arguments: vec!["xbar", "foobarbar"],
+                expected_results: "0",
+            },
+            FunctionExample {
+                name: "with_start",
+                arguments: vec!["bar", "foobarbar", "5"],
+                expected_results: "7",
+            },
+            FunctionExample {
+                name: "not_a_sub",
+                arguments: vec!["5", "foobarbar", "5"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "with_str_as_num",
+                arguments: vec!["bar", "20", "5"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "with_start_as_str",
+                arguments: vec!["bar", "foobarbar", "a"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "with_start_larger",
+                arguments: vec!["bar", "foobarbar", "25"],
+                expected_results: "0",
+            },
+        ]
+    }
+}
+
 struct SubString {}
 impl Operator for SubString {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
@@ -1768,7 +1860,8 @@ mod tests_functions {
 
     use super::{
         Abs, Ascii, Chr, Coalece, Concat, ConcatWs, CurrentDate, Format, Greatest, If, Least, Left,
-        Length, Lower, Lpad, Ltrim, Now, NullIf, Operator, Pi, SubString, ToTimestamp, User,
+        Length, Lower, Lpad, Ltrim, Now, NullIf, Operator, Pi, Position, SubString, ToTimestamp,
+        User,
     };
 
     fn test_func(operator: &impl Operator) -> Result<(), CvsSqlError> {
@@ -1987,5 +2080,10 @@ mod tests_functions {
             }
             _ => false,
         })
+    }
+
+    #[test]
+    fn test_position() -> Result<(), CvsSqlError> {
+        test_func(&Position {})
     }
 }
