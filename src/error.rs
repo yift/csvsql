@@ -22,4 +22,6 @@ pub enum CvsSqlError {
     NoSelect,
     #[error("`{0}`")]
     ColumnIndexError(#[from] ColumnIndexError),
+    #[error("Can't aggregate without a group")]
+    NoGroupBy,
 }

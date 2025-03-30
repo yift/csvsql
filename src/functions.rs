@@ -102,7 +102,7 @@ fn build_aggregator_function(
 ) -> Result<Box<dyn Projection>, CvsSqlError> {
     let parent_metadata = match metadata {
         Metadata::Grouped { parent, this: _ } => parent,
-        _ => return Err(CvsSqlError::ToDo("force aggreation".into())),
+        _ => return Err(CvsSqlError::NoGroupBy),
     };
     let lst = match &args {
         FunctionArguments::List(lst) => lst,
@@ -526,7 +526,7 @@ mod test_aggregations {
         };
 
         let sql = format!(
-            "SELECT {}({}) FROM {} GROUP BY 1\n",
+            "SELECT {}({}) FROM {}\n",
             operator.name(),
             selector,
             table_name

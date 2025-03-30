@@ -86,3 +86,25 @@ pub fn group_by(
 
     Ok(GroupedResultSet { rows, metadata })
 }
+
+pub fn force_group_by(results: ResultSet) -> GroupedResultSet {
+    let mut group_rows = vec![];
+    for row in results.data.into_iter() {
+        group_rows.push(GroupRow {
+            data: row,
+            group_rows: vec![],
+        });
+    }
+    let rows = vec![GroupRow {
+        data: DataRow::new(vec![]),
+        group_rows,
+    }];
+    let metadata = SimpleResultSetMetadata::new(results.metadata.result_name().cloned());
+    let metadata = Metadata::Simple(metadata);
+    let metadata = Metadata::Grouped {
+        parent: Box::new(results.metadata),
+        this: Box::new(metadata),
+    };
+
+    GroupedResultSet { rows, metadata }
+}

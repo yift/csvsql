@@ -4,7 +4,7 @@ use crate::cartesian_product_results::join;
 use crate::error::CvsSqlError;
 use crate::file_results::read_file;
 use crate::filter_results::make_filter;
-use crate::group_by::group_by;
+use crate::group_by::{force_group_by, group_by};
 use crate::named_results::alias_results;
 use crate::order_by_results::order_by;
 use crate::projections::make_projection;
@@ -56,7 +56,7 @@ impl Extractor for Query {
         }
 
         match &*self.body {
-            SetExpr::Select(select) => extract(select, &self.order_by, engine),
+            SetExpr::Select(select) => extract(select, &self.order_by, engine, false),
             SetExpr::Query(_) => Err(CvsSqlError::ToDo("SELECT (SELECT ...)".to_string())),
             SetExpr::Values(_) => Err(CvsSqlError::Unsupported("SELECT ... VALUES".to_string())),
             SetExpr::Insert(_) => Err(CvsSqlError::Unsupported("SELECT ... INSERT".to_string())),
@@ -77,6 +77,7 @@ fn extract(
     select: &Select,
     order: &Option<OrderBy>,
     engine: &Engine,
+    force_group: bool,
 ) -> Result<ResultSet, CvsSqlError> {
     if select.distinct.is_some() {
         return Err(CvsSqlError::Unsupported("SELECT DISTINCT".to_string()));
@@ -149,17 +150,21 @@ fn extract(
 
     let filter = make_filter(engine, &select.selection, product)?;
 
-    let mut group_by = match &select.group_by {
-        GroupByExpr::All(_) => {
-            return Err(CvsSqlError::Unsupported(
-                "SELECT ... GROUP BY ALL".to_string(),
-            ));
-        }
-        GroupByExpr::Expressions(exp, mods) => {
-            if !mods.is_empty() {
-                return Err(CvsSqlError::ToDo("SELECT ... GROUP BY".to_string()));
+    let mut group_by = if force_group {
+        force_group_by(filter)
+    } else {
+        match &select.group_by {
+            GroupByExpr::All(_) => {
+                return Err(CvsSqlError::Unsupported(
+                    "SELECT ... GROUP BY ALL".to_string(),
+                ));
             }
-            group_by(engine, exp, filter)?
+            GroupByExpr::Expressions(exp, mods) => {
+                if !mods.is_empty() {
+                    return Err(CvsSqlError::ToDo("SELECT ... GROUP BY WITH".to_string()));
+                }
+                group_by(engine, exp, filter)?
+            }
         }
     };
     if select.having.is_some() {
@@ -167,7 +172,17 @@ fn extract(
     }
 
     order_by(engine, order, &mut group_by)?;
-    make_projection(engine, group_by, &select.projection)
+    match make_projection(engine, group_by, &select.projection) {
+        Ok(proj) => Ok(proj),
+        Err(CvsSqlError::NoGroupBy) => {
+            if !force_group {
+                extract(select, order, engine, true)
+            } else {
+                Err(CvsSqlError::NoGroupBy)
+            }
+        }
+        Err(e) => Err(e),
+    }
 }
 
 impl Extractor for TableFactor {
