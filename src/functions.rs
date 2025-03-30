@@ -59,6 +59,7 @@ fn build_function_from_name(
         "SUM" => build_aggregator_function(metadata, engine, args, Box::new(Sum {})),
         "MIN" => build_aggregator_function(metadata, engine, args, Box::new(Min {})),
         "MAX" => build_aggregator_function(metadata, engine, args, Box::new(Max {})),
+        "ANY_VALUE" => build_aggregator_function(metadata, engine, args, Box::new(AnyValue {})),
 
         "ABS" => build_function(metadata, engine, args, Box::new(Abs {})),
         "ASCII" => build_function(metadata, engine, args, Box::new(Ascii {})),
@@ -412,6 +413,30 @@ impl AggregateOperator for Max {
     }
 }
 
+struct AnyValue {}
+impl AggregateOperator for AnyValue {
+    fn name(&self) -> &str {
+        "ANY_VALUE"
+    }
+    fn support_wildcard_argument(&self) -> bool {
+        false
+    }
+    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+        let val = data.next();
+        val.unwrap_or(Value::Empty)
+    }
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<AggregationExample<'a>> {
+        vec![AggregationExample {
+            name: "values",
+            is_distinct: false,
+            is_wildcard: false,
+            data: vec!["a", "b", "2", "3"],
+            expected_results: "a",
+        }]
+    }
+}
+
 struct AggregatedFunction {
     distinct: bool,
     argument: Box<dyn Projection>,
@@ -459,7 +484,7 @@ mod test_aggregations {
     use crate::{args::Args, engine::Engine, error::CvsSqlError, results::Column};
     use std::io::Write;
 
-    use super::{AggregateOperator, AggregationExample, Avg, Count, Max, Min, Sum};
+    use super::{AggregateOperator, AggregationExample, AnyValue, Avg, Count, Max, Min, Sum};
 
     fn test_agg(operator: &impl AggregateOperator) -> Result<(), CvsSqlError> {
         let dir = format!("./target/function_tests/{}", operator.name().to_lowercase());
@@ -552,6 +577,11 @@ mod test_aggregations {
     #[test]
     fn test_max() -> Result<(), CvsSqlError> {
         test_agg(&Max {})
+    }
+
+    #[test]
+    fn test_any_value() -> Result<(), CvsSqlError> {
+        test_agg(&AnyValue {})
     }
 }
 
