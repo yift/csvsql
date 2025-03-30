@@ -84,13 +84,20 @@ fn build_function_from_name(
         "IF" => build_function(metadata, engine, args, Box::new(If {})),
         "NULLIF" => build_function(metadata, engine, args, Box::new(NullIf {})),
         "LOWER" | "LCASE" => build_function(metadata, engine, args, Box::new(Lower {})),
+        "UPPER" | "UCASE" => build_function(metadata, engine, args, Box::new(Upper {})),
         "LEAST" => build_function(metadata, engine, args, Box::new(Least {})),
         "LEFT" => build_function(metadata, engine, args, Box::new(Left {})),
+        "RIGHT" => build_function(metadata, engine, args, Box::new(Right {})),
         "LPAD" => build_function(metadata, engine, args, Box::new(Lpad {})),
+        "RPAD" => build_function(metadata, engine, args, Box::new(Rpad {})),
         "LTRIM" => build_function(metadata, engine, args, Box::new(Ltrim {})),
+        "RTRIM" => build_function(metadata, engine, args, Box::new(Rtrim {})),
         "SUBSTRING" | "MID" => build_function(metadata, engine, args, Box::new(SubString {})),
         "PI" => build_function(metadata, engine, args, Box::new(Pi {})),
         "POSITION" | "LOCATE" => build_function(metadata, engine, args, Box::new(Position {})),
+        "REPEAT" => build_function(metadata, engine, args, Box::new(Repeat {})),
+        "REPLACE" => build_function(metadata, engine, args, Box::new(Replace {})),
+        "REVERSE" => build_function(metadata, engine, args, Box::new(Reverse {})),
         _ => Err(CvsSqlError::Unsupported(format!("function {}", name))),
     }
 }
@@ -1398,6 +1405,41 @@ impl Operator for Lower {
         ]
     }
 }
+struct Upper {}
+impl Operator for Upper {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        args.first()
+            .and_then(|f| f.as_string())
+            .map(|f| f.to_uppercase())
+            .into()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "UPPER"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "str",
+                arguments: vec!["HeLLo"],
+                expected_results: "HELLO",
+            },
+            FunctionExample {
+                name: "number",
+                arguments: vec!["123"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
 struct Least {}
 impl Operator for Least {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
@@ -1480,6 +1522,66 @@ impl Operator for Left {
                 name: "simple",
                 arguments: vec!["test", "2"],
                 expected_results: "te",
+            },
+            FunctionExample {
+                name: "exact",
+                arguments: vec!["test", "4"],
+                expected_results: "test",
+            },
+            FunctionExample {
+                name: "more",
+                arguments: vec!["test", "12"],
+                expected_results: "test",
+            },
+            FunctionExample {
+                name: "nan",
+                arguments: vec!["test", "five"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_text",
+                arguments: vec!["10", "10"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
+struct Right {}
+impl Operator for Right {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let text = args.first();
+        let Some(text) = text.as_string() else {
+            return Value::Empty.into();
+        };
+        let length = args.get(1);
+        let Some(length) = length.as_usize() else {
+            return Value::Empty.into();
+        };
+        if text.len() < length {
+            Value::Str(text.to_string()).into()
+        } else {
+            let start = text.len() - length;
+            Value::Str(text[start..].to_string()).into()
+        }
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(2)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "RIGHT"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["test", "3"],
+                expected_results: "est",
             },
             FunctionExample {
                 name: "exact",
@@ -1600,6 +1702,100 @@ impl Operator for Lpad {
     }
 }
 
+struct Rpad {}
+impl Operator for Rpad {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let text = args.first();
+        let Some(text) = text.as_string() else {
+            return Value::Empty.into();
+        };
+        let length = args.get(1);
+        let Some(length) = length.as_usize() else {
+            return Value::Empty.into();
+        };
+        let pad = args.get(2);
+
+        let Some(pad) = pad.as_string() else {
+            return Value::Empty.into();
+        };
+
+        if text.len() > length {
+            Value::Str(text[0..length].to_string()).into()
+        } else if pad.is_empty() {
+            Value::Str(text.to_string()).into()
+        } else {
+            let mut str = text.to_string();
+            let mut chars = pad.chars().cycle();
+            for _ in 0..length - text.len() {
+                let chr = chars.next().unwrap();
+                str.push(chr);
+            }
+            Value::Str(str).into()
+        }
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(3)
+    }
+    fn min_args(&self) -> usize {
+        3
+    }
+    fn name(&self) -> &str {
+        "RPAD"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["text", "10", "pad"],
+                expected_results: "textpadpad",
+            },
+            FunctionExample {
+                name: "more",
+                arguments: vec!["text", "12", "pad"],
+                expected_results: "textpadpadpa",
+            },
+            FunctionExample {
+                name: "less",
+                arguments: vec!["text", "3", "pad"],
+                expected_results: "tex",
+            },
+            FunctionExample {
+                name: "exact",
+                arguments: vec!["text", "4", "pad"],
+                expected_results: "text",
+            },
+            FunctionExample {
+                name: "negative",
+                arguments: vec!["text", "-122", "pad"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "non_text",
+                arguments: vec!["12", "10", "pad"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "non_number",
+                arguments: vec!["text", "me", "pad"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_pad",
+                arguments: vec!["text", "10", "2"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "empty_pad",
+                arguments: vec!["text", "10", "2"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
 struct Ltrim {}
 impl Operator for Ltrim {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
@@ -1625,6 +1821,41 @@ impl Operator for Ltrim {
             FunctionExample {
                 name: "simple",
                 arguments: vec!["  hello"],
+                expected_results: "hello",
+            },
+            FunctionExample {
+                name: "not_text",
+                arguments: vec!["12"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+struct Rtrim {}
+impl Operator for Rtrim {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        args.first()
+            .and_then(|f| f.as_string())
+            .map(|f| f.trim_end())
+            .into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "RTRIM"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["hello\t"],
                 expected_results: "hello",
             },
             FunctionExample {
@@ -1713,6 +1944,149 @@ impl Operator for Position {
                 name: "with_start_larger",
                 arguments: vec!["bar", "foobarbar", "25"],
                 expected_results: "0",
+            },
+        ]
+    }
+}
+
+struct Repeat {}
+impl Operator for Repeat {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let str = args.first();
+        let Some(str) = str.as_string() else {
+            return Value::Empty.into();
+        };
+        let count = args.get(1);
+        let Some(count) = count.as_usize() else {
+            return Value::Empty.into();
+        };
+        Value::Str(str.repeat(count)).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(2)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "REPEAT"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["bar", "3"],
+                expected_results: "barbarbar",
+            },
+            FunctionExample {
+                name: "not_a_string",
+                arguments: vec!["4", "3"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_number",
+                arguments: vec!["bar", "test"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
+struct Replace {}
+impl Operator for Replace {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let str = args.first();
+        let Some(str) = str.as_string() else {
+            return Value::Empty.into();
+        };
+        let what = args.get(1);
+        let Some(what) = what.as_string() else {
+            return Value::Empty.into();
+        };
+        let into = args.get(2);
+        let Some(into) = into.as_string() else {
+            return Value::Empty.into();
+        };
+        Value::Str(str.replace(what, into)).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(3)
+    }
+    fn min_args(&self) -> usize {
+        3
+    }
+    fn name(&self) -> &str {
+        "REPLACE"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["hello", "l", "L"],
+                expected_results: "heLLo",
+            },
+            FunctionExample {
+                name: "nope",
+                arguments: vec!["test", "bar", "foo"],
+                expected_results: "test",
+            },
+            FunctionExample {
+                name: "not_a_string",
+                arguments: vec!["1", "test", "one"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_what",
+                arguments: vec!["bar", "2", "one"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_with",
+                arguments: vec!["bar", "test", "3"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
+struct Reverse {}
+impl Operator for Reverse {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let str = args.first();
+        let Some(str) = str.as_string() else {
+            return Value::Empty.into();
+        };
+        Value::Str(str.chars().rev().collect()).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "REVERSE"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["simple"],
+                expected_results: "elpmis",
+            },
+            FunctionExample {
+                name: "nopre",
+                arguments: vec!["323"],
+                expected_results: "",
             },
         ]
     }
@@ -1860,8 +2234,8 @@ mod tests_functions {
 
     use super::{
         Abs, Ascii, Chr, Coalece, Concat, ConcatWs, CurrentDate, Format, Greatest, If, Least, Left,
-        Length, Lower, Lpad, Ltrim, Now, NullIf, Operator, Pi, Position, SubString, ToTimestamp,
-        User,
+        Length, Lower, Lpad, Ltrim, Now, NullIf, Operator, Pi, Position, Repeat, Replace, Reverse,
+        Right, Rpad, Rtrim, SubString, ToTimestamp, Upper, User,
     };
 
     fn test_func(operator: &impl Operator) -> Result<(), CvsSqlError> {
@@ -2048,6 +2422,11 @@ mod tests_functions {
     }
 
     #[test]
+    fn test_upper() -> Result<(), CvsSqlError> {
+        test_func(&Upper {})
+    }
+
+    #[test]
     fn test_least() -> Result<(), CvsSqlError> {
         test_func(&Least {})
     }
@@ -2058,13 +2437,28 @@ mod tests_functions {
     }
 
     #[test]
+    fn test_right() -> Result<(), CvsSqlError> {
+        test_func(&Right {})
+    }
+
+    #[test]
     fn test_lpad() -> Result<(), CvsSqlError> {
         test_func(&Lpad {})
     }
 
     #[test]
+    fn test_rpad() -> Result<(), CvsSqlError> {
+        test_func(&Rpad {})
+    }
+
+    #[test]
     fn test_ltrim() -> Result<(), CvsSqlError> {
         test_func(&Ltrim {})
+    }
+
+    #[test]
+    fn test_rtrim() -> Result<(), CvsSqlError> {
+        test_func(&Rtrim {})
     }
 
     #[test]
@@ -2085,5 +2479,20 @@ mod tests_functions {
     #[test]
     fn test_position() -> Result<(), CvsSqlError> {
         test_func(&Position {})
+    }
+
+    #[test]
+    fn test_repeat() -> Result<(), CvsSqlError> {
+        test_func(&Repeat {})
+    }
+
+    #[test]
+    fn test_replace() -> Result<(), CvsSqlError> {
+        test_func(&Replace {})
+    }
+
+    #[test]
+    fn test_reverese() -> Result<(), CvsSqlError> {
+        test_func(&Reverse {})
     }
 }
