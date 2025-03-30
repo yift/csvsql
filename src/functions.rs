@@ -98,6 +98,11 @@ fn build_function_from_name(
         "REPEAT" => build_function(metadata, engine, args, Box::new(Repeat {})),
         "REPLACE" => build_function(metadata, engine, args, Box::new(Replace {})),
         "REVERSE" => build_function(metadata, engine, args, Box::new(Reverse {})),
+        "LN" => build_function(metadata, engine, args, Box::new(Ln {})),
+        "EXP" => build_function(metadata, engine, args, Box::new(Exp {})),
+        "LOG" => build_function(metadata, engine, args, Box::new(Log {})),
+        "LOG2" => build_function(metadata, engine, args, Box::new(Log2 {})),
+        "LOG10" => build_function(metadata, engine, args, Box::new(Log10 {})),
         _ => Err(CvsSqlError::Unsupported(format!("function {}", name))),
     }
 }
@@ -717,6 +722,11 @@ impl From<Option<u32>> for SmartReference<'_, Value> {
         .into()
     }
 }
+impl From<f64> for SmartReference<'_, Value> {
+    fn from(val: f64) -> Self {
+        BigDecimal::from_f64(val).into()
+    }
+}
 
 impl From<Option<usize>> for SmartReference<'_, Value> {
     fn from(val: Option<usize>) -> Self {
@@ -771,6 +781,9 @@ trait Extractor {
     }
     fn as_usize(&self) -> Option<usize> {
         self.as_num().and_then(|s| s.to_usize())
+    }
+    fn as_f64(&self) -> Option<f64> {
+        self.as_num().and_then(|s| s.to_f64())
     }
 }
 impl Extractor for Value {
@@ -2221,6 +2234,217 @@ impl Operator for Pi {
     }
 }
 
+struct Exp {}
+impl Operator for Exp {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let num = args.first();
+        let Some(num) = num.as_num() else {
+            return Value::Empty.into();
+        };
+
+        Value::Number(num.exp()).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "EXP"
+    }
+}
+
+struct Ln {}
+impl Operator for Ln {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let num = args.first();
+        let Some(num) = num.as_f64() else {
+            return Value::Empty.into();
+        };
+        if num <= 0.0 {
+            return Value::Empty.into();
+        }
+
+        num.ln().into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "LN"
+    }
+}
+struct Log {}
+impl Operator for Log {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let (base, num) = if args.len() == 2 {
+            let base = args.first();
+            let Some(base) = base.as_f64() else {
+                return Value::Empty.into();
+            };
+            let num = args.get(1);
+            let Some(num) = num.as_f64() else {
+                return Value::Empty.into();
+            };
+            if base <= 0.0 {
+                return Value::Empty.into();
+            }
+            (base, num)
+        } else {
+            let num = args.first();
+            let Some(num) = num.as_f64() else {
+                return Value::Empty.into();
+            };
+            (10.0, num)
+        };
+        if num <= 0.0 {
+            return Value::Empty.into();
+        }
+
+        num.log(base).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(2)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "LOG"
+    }
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["100"],
+                expected_results: "2",
+            },
+            FunctionExample {
+                name: "zero",
+                arguments: vec!["0"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_num",
+                arguments: vec!["test"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "two_args",
+                arguments: vec!["2", "8"],
+                expected_results: "3",
+            },
+            FunctionExample {
+                name: "invalid_base",
+                arguments: vec!["0", "8"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "no_base",
+                arguments: vec!["", "8"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
+struct Log2 {}
+impl Operator for Log2 {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let num = args.first();
+        let Some(num) = num.as_f64() else {
+            return Value::Empty.into();
+        };
+        if num <= 0.0 {
+            return Value::Empty.into();
+        }
+
+        num.log2().into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "LOG2"
+    }
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["16"],
+                expected_results: "4",
+            },
+            FunctionExample {
+                name: "zero",
+                arguments: vec!["0"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_num",
+                arguments: vec!["test"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+struct Log10 {}
+impl Operator for Log10 {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let num = args.first();
+        let Some(num) = num.as_f64() else {
+            return Value::Empty.into();
+        };
+        if num <= 0.0 {
+            return Value::Empty.into();
+        }
+
+        num.log10().into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "LOG10"
+    }
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["100"],
+                expected_results: "2",
+            },
+            FunctionExample {
+                name: "zero",
+                arguments: vec!["0"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_num",
+                arguments: vec!["test"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests_functions {
     use std::fs::{self, OpenOptions};
@@ -2233,9 +2457,10 @@ mod tests_functions {
     use std::io::Write;
 
     use super::{
-        Abs, Ascii, Chr, Coalece, Concat, ConcatWs, CurrentDate, Format, Greatest, If, Least, Left,
-        Length, Lower, Lpad, Ltrim, Now, NullIf, Operator, Pi, Position, Repeat, Replace, Reverse,
-        Right, Rpad, Rtrim, SubString, ToTimestamp, Upper, User,
+        Abs, Ascii, Chr, Coalece, Concat, ConcatWs, CurrentDate, Exp, Format, Greatest, If, Least,
+        Left, Length, Ln, Log, Log2, Log10, Lower, Lpad, Ltrim, Now, NullIf, Operator, Pi,
+        Position, Repeat, Replace, Reverse, Right, Rpad, Rtrim, SubString, ToTimestamp, Upper,
+        User,
     };
 
     fn test_func(operator: &impl Operator) -> Result<(), CvsSqlError> {
@@ -2474,6 +2699,50 @@ mod tests_functions {
             }
             _ => false,
         })
+    }
+
+    #[test]
+    fn test_ln() -> Result<(), CvsSqlError> {
+        test_with_details(&Ln {}, "ln", &vec!["10"], |r| match r {
+            Some(Value::Number(num)) => {
+                num.to_f64().unwrap() > 2.30 && num.to_f64().unwrap() < 2.31
+            }
+            _ => false,
+        })?;
+        test_with_details(&Ln {}, "neg_ln", &vec!["-10"], |r| r == Some(&Value::Empty))?;
+        test_with_details(&Ln {}, "nan", &vec![""], |r| r == Some(&Value::Empty))
+    }
+
+    #[test]
+    fn test_exp() -> Result<(), CvsSqlError> {
+        test_with_details(&Exp {}, "exp", &vec!["10"], |r| match r {
+            Some(Value::Number(num)) => {
+                num.to_f64().unwrap() > 22026.46 && num.to_f64().unwrap() < 22026.47
+            }
+            _ => false,
+        })?;
+        test_with_details(&Exp {}, "neg_exp", &vec!["-10"], |r| match r {
+            Some(Value::Number(num)) => {
+                num.to_f64().unwrap() > 4.53e-5 && num.to_f64().unwrap() < 4.54e-5
+            }
+            _ => false,
+        })?;
+        test_with_details(&Exp {}, "nan", &vec![""], |r| r == Some(&Value::Empty))
+    }
+
+    #[test]
+    fn test_log() -> Result<(), CvsSqlError> {
+        test_func(&Log {})
+    }
+
+    #[test]
+    fn test_log2() -> Result<(), CvsSqlError> {
+        test_func(&Log2 {})
+    }
+
+    #[test]
+    fn test_log10() -> Result<(), CvsSqlError> {
+        test_func(&Log10 {})
     }
 
     #[test]
