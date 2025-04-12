@@ -13,3 +13,4 @@ sqlparser = {version = "0.53", features = ["bigdecimal"]}
 itertools = "0.14"
 regex = "1.11"
 whoami = "1.5"
+rand = "0.9"

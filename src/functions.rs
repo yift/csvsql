@@ -14,6 +14,7 @@ use bigdecimal::ToPrimitive;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::{TimeZone, Utc, offset::LocalResult};
 use itertools::Itertools;
+use regex::Regex;
 use sqlparser::ast::{
     DuplicateTreatment, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
 };
@@ -70,7 +71,9 @@ fn build_function_from_name(
         "COALESCE" => build_function(metadata, engine, args, Box::new(Coalece {})),
         "CONCAT" => build_function(metadata, engine, args, Box::new(Concat {})),
         "CONCAT_WS" => build_function(metadata, engine, args, Box::new(ConcatWs {})),
-        "CURRENT_DATE" => build_function(metadata, engine, args, Box::new(CurrentDate {})),
+        "CURRENT_DATE" | "CURDATE" => {
+            build_function(metadata, engine, args, Box::new(CurrentDate {}))
+        }
         "NOW" | "CURRENT_TIME" | "CURRENT_TIMESTAMP" | "CURTIME" | "LOCALTIME"
         | "LOCALTIMESTAMP" => build_function(metadata, engine, args, Box::new(Now {})),
         "USER" | "CURRENT_USER" => build_function(metadata, engine, args, Box::new(User {})),
@@ -92,17 +95,26 @@ fn build_function_from_name(
         "RPAD" => build_function(metadata, engine, args, Box::new(Rpad {})),
         "LTRIM" => build_function(metadata, engine, args, Box::new(Ltrim {})),
         "RTRIM" => build_function(metadata, engine, args, Box::new(Rtrim {})),
-        "SUBSTRING" | "MID" => build_function(metadata, engine, args, Box::new(SubString {})),
+        "SUBSTRING" | "MID" | "SUBSTR" => {
+            build_function(metadata, engine, args, Box::new(SubString {}))
+        }
         "PI" => build_function(metadata, engine, args, Box::new(Pi {})),
+        "RANDOM" | "RAND" => build_function(metadata, engine, args, Box::new(Random {})),
         "POSITION" | "LOCATE" => build_function(metadata, engine, args, Box::new(Position {})),
         "REPEAT" => build_function(metadata, engine, args, Box::new(Repeat {})),
         "REPLACE" => build_function(metadata, engine, args, Box::new(Replace {})),
+        "REGEX_LIKE" => build_function(metadata, engine, args, Box::new(RegexLike {})),
+        "REGEX_REPLACE" => build_function(metadata, engine, args, Box::new(RegexReplace {})),
+        "REGEXP_SUBSTR" => build_function(metadata, engine, args, Box::new(RegexSubstring {})),
         "REVERSE" => build_function(metadata, engine, args, Box::new(Reverse {})),
         "LN" => build_function(metadata, engine, args, Box::new(Ln {})),
         "EXP" => build_function(metadata, engine, args, Box::new(Exp {})),
         "LOG" => build_function(metadata, engine, args, Box::new(Log {})),
         "LOG2" => build_function(metadata, engine, args, Box::new(Log2 {})),
         "LOG10" => build_function(metadata, engine, args, Box::new(Log10 {})),
+        "POW" | "POWER" => build_function(metadata, engine, args, Box::new(Power {})),
+        "ROUND" => build_function(metadata, engine, args, Box::new(Round {})),
+        "SQRT" => build_function(metadata, engine, args, Box::new(Sqrt {})),
         _ => Err(CvsSqlError::Unsupported(format!("function {}", name))),
     }
 }
@@ -2068,6 +2080,320 @@ impl Operator for Replace {
     }
 }
 
+struct RegexReplace {}
+impl Operator for RegexReplace {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let str = args.first();
+        let Some(str) = str.as_string() else {
+            return Value::Empty.into();
+        };
+        let pattern = args.get(1);
+        let Some(pattern) = pattern.as_string() else {
+            return Value::Empty.into();
+        };
+        let Ok(pattern) = Regex::new(pattern) else {
+            return Value::Empty.into();
+        };
+        let repl = args.get(2);
+        let Some(repl) = repl.as_string() else {
+            return Value::Empty.into();
+        };
+        Value::Str(pattern.replace(str, repl).to_string()).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(3)
+    }
+    fn min_args(&self) -> usize {
+        3
+    }
+    fn name(&self) -> &str {
+        "REGEX_REPLACE"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["a b c", "b", "B"],
+                expected_results: "a B c",
+            },
+            FunctionExample {
+                name: "few",
+                arguments: vec!["test", "[a-z]", "T"],
+                expected_results: "Test",
+            },
+            FunctionExample {
+                name: "not_a_string",
+                arguments: vec!["1", "b", "B"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_string_pattern",
+                arguments: vec!["abc", "1", "B"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "invalid_pattern",
+                arguments: vec!["abc", "[+", "B"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "no_replacement",
+                arguments: vec!["abc", "b", "4"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
+struct RegexLike {}
+impl Operator for RegexLike {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let expr = args.first();
+        let Some(expr) = expr.as_string() else {
+            return Value::Empty.into();
+        };
+        let pattern = args.get(1);
+        let Some(pattern) = pattern.as_string() else {
+            return Value::Empty.into();
+        };
+        let flags = args.get(2);
+        let pattern = if flags.is_some() {
+            let Some(flags) = flags.as_string() else {
+                return Value::Empty.into();
+            };
+
+            Regex::new(format!("(?{}:{})", flags, pattern).as_str())
+        } else {
+            Regex::new(pattern)
+        };
+
+        let Ok(pattern) = pattern else {
+            return Value::Empty.into();
+        };
+
+        Value::Bool(pattern.find(expr).is_some()).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(3)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "REGEX_LIKE"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple_true",
+                arguments: vec!["test", "es"],
+                expected_results: "TRUE",
+            },
+            FunctionExample {
+                name: "simple_false",
+                arguments: vec!["test", "ES"],
+                expected_results: "FALSE",
+            },
+            FunctionExample {
+                name: "no_string_one",
+                arguments: vec!["1", "op"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "no_string_pattern",
+                arguments: vec!["test", "FALSE"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "invalid_pattern",
+                arguments: vec!["test", "[+"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "with_flags",
+                arguments: vec!["test", "TEST", "i"],
+                expected_results: "TRUE",
+            },
+            FunctionExample {
+                name: "with_flags",
+                arguments: vec!["test", "TEST", "i"],
+                expected_results: "TRUE",
+            },
+            FunctionExample {
+                name: "with_invalid_flags",
+                arguments: vec!["test", "TEST", "q"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "with_no_string_flags",
+                arguments: vec!["test", "TEST", "TRUE"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
+struct RegexSubstring {}
+impl Operator for RegexSubstring {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let expr = args.first();
+        let Some(expr) = expr.as_string() else {
+            return Value::Empty.into();
+        };
+        let pattern = args.get(1);
+        let Some(pattern) = pattern.as_string() else {
+            return Value::Empty.into();
+        };
+        let pos = args.get(2);
+        let pos = match pos {
+            None => Some(1),
+            Some(pos) => pos.as_usize(),
+        };
+        let Some(pos) = pos else {
+            return Value::Empty.into();
+        };
+        if pos == 0 {
+            return Value::Empty.into();
+        }
+        let pos = pos - 1;
+        let occurrence = args.get(3);
+        let occurrence = match occurrence {
+            None => Some(1),
+            Some(occurrence) => occurrence.as_usize(),
+        };
+        let Some(occurrence) = occurrence else {
+            return Value::Empty.into();
+        };
+        if occurrence == 0 {
+            return Value::Empty.into();
+        }
+        let occurrence = occurrence - 1;
+
+        let flags = args.get(4);
+        let pattern = if flags.is_some() {
+            let Some(flags) = flags.as_string() else {
+                return Value::Empty.into();
+            };
+
+            Regex::new(format!("(?{}:{})", flags, pattern).as_str())
+        } else {
+            Regex::new(pattern)
+        };
+        if pos > expr.len() {
+            return Value::Str(String::new()).into();
+        }
+
+        let Ok(pattern) = pattern else {
+            return Value::Empty.into();
+        };
+
+        let matches = pattern
+            .find_iter(&expr[pos..])
+            .nth(occurrence)
+            .map(|f| f.as_str())
+            .unwrap_or("");
+
+        Value::Str(matches.into()).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(5)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "REGEXP_SUBSTR"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple_true",
+                arguments: vec!["abc def ghi", "[a-z]+"],
+                expected_results: "abc",
+            },
+            FunctionExample {
+                name: "can_not_find",
+                arguments: vec!["test", "ES"],
+                expected_results: "\"\"",
+            },
+            FunctionExample {
+                name: "with_pos",
+                arguments: vec!["abc def ghi", "[a-z]+", "2"],
+                expected_results: "bc",
+            },
+            FunctionExample {
+                name: "with_pos_and_oc",
+                arguments: vec!["abc def ghi", "[a-z]+", "2", "2"],
+                expected_results: "def",
+            },
+            FunctionExample {
+                name: "with_pos_and_oc_to_large",
+                arguments: vec!["abc def ghi", "[a-z]+", "2", "10"],
+                expected_results: "\"\"",
+            },
+            FunctionExample {
+                name: "with_flags",
+                arguments: vec!["abc def ghi", "[A-Z]+", "1", "1", "i"],
+                expected_results: "abc",
+            },
+            FunctionExample {
+                name: "invalid_str",
+                arguments: vec!["1", "[A-Z]+", "1", "1", "i"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "no_regex",
+                arguments: vec!["abc def ghi", "2", "1", "1", "i"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "invalid_regex",
+                arguments: vec!["abc def ghi", "[A-", "1", "1", "i"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "invalid_pos",
+                arguments: vec!["abc def ghi", "[A-Z]+", "a", "1", "i"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "post_zero",
+                arguments: vec!["abc def ghi", "[A-Z]+", "0", "1", "i"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "invalid_oc",
+                arguments: vec!["abc def ghi", "[A-Z]+", "1", "A", "i"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "zero_oc",
+                arguments: vec!["abc def ghi", "[A-Z]+", "1", "0", "i"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "invalid_falgs",
+                arguments: vec!["abc def ghi", "[A-Z]+", "1", "0", "2"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "unknown_flags",
+                arguments: vec!["abc def ghi", "[A-Z]+", "1", "0", "1"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
 struct Reverse {}
 impl Operator for Reverse {
     fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
@@ -2099,6 +2425,127 @@ impl Operator for Reverse {
             FunctionExample {
                 name: "nopre",
                 arguments: vec!["323"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+struct Round {}
+impl Operator for Round {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let num = args.first();
+        let Some(num) = num.as_num() else {
+            return Value::Empty.into();
+        };
+        let digit = args.get(1);
+        let digit = if digit.is_some() {
+            digit.as_i64()
+        } else {
+            Some(0)
+        };
+        let Some(digit) = digit else {
+            return Value::Empty.into();
+        };
+
+        Value::Number(num.with_scale_round(digit, bigdecimal::RoundingMode::HalfDown)).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(2)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "ROUND"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["-1.23"],
+                expected_results: "-1",
+            },
+            FunctionExample {
+                name: "larger",
+                arguments: vec!["43.123"],
+                expected_results: "43",
+            },
+            FunctionExample {
+                name: "go_up",
+                arguments: vec!["43.6123"],
+                expected_results: "44",
+            },
+            FunctionExample {
+                name: "with_arg",
+                arguments: vec![".1234567890123456789012345678901234567890", "35"],
+                expected_results: "0.12345678901234567890123456789012346",
+            },
+            FunctionExample {
+                name: "with_negative_arg",
+                arguments: vec!["23.298", "-1"],
+                expected_results: "20",
+            },
+            FunctionExample {
+                name: "nan1",
+                arguments: vec!["test"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "nan2",
+                arguments: vec!["1", "test"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+struct Sqrt {}
+impl Operator for Sqrt {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let num = args.first();
+        let Some(num) = num.as_num() else {
+            return Value::Empty.into();
+        };
+        match num.sqrt() {
+            Some(num) => Value::Number(num),
+            None => Value::Empty,
+        }
+        .into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        1
+    }
+    fn name(&self) -> &str {
+        "SQRT"
+    }
+
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["16"],
+                expected_results: "4",
+            },
+            FunctionExample {
+                name: "larger",
+                arguments: vec!["121"],
+                expected_results: "11",
+            },
+            FunctionExample {
+                name: "neg",
+                arguments: vec!["-4"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "nan",
+                arguments: vec!["test"],
                 expected_results: "",
             },
         ]
@@ -2445,6 +2892,89 @@ impl Operator for Log10 {
     }
 }
 
+struct Power {}
+impl Operator for Power {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let base = args.first();
+        let Some(base) = base.as_f64() else {
+            return Value::Empty.into();
+        };
+        let num = args.get(1);
+        let Some(num) = num.as_f64() else {
+            return Value::Empty.into();
+        };
+        if base <= 0.0 {
+            return Value::Empty.into();
+        }
+
+        base.powf(num).into()
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(2)
+    }
+    fn min_args(&self) -> usize {
+        2
+    }
+    fn name(&self) -> &str {
+        "POWER"
+    }
+    #[cfg(test)]
+    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
+        vec![
+            FunctionExample {
+                name: "simple",
+                arguments: vec!["2", "3"],
+                expected_results: "8",
+            },
+            FunctionExample {
+                name: "negative",
+                arguments: vec!["2", "-2"],
+                expected_results: "0.25",
+            },
+            FunctionExample {
+                name: "not_a_num_base",
+                arguments: vec!["a", "2"],
+                expected_results: "",
+            },
+            FunctionExample {
+                name: "not_a_num_exp",
+                arguments: vec!["2", "a"],
+                expected_results: "",
+            },
+        ]
+    }
+}
+
+struct Random {}
+impl Operator for Random {
+    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
+        let rnd: f64 = rand::random();
+        if args.is_empty() {
+            rnd.into()
+        } else {
+            let Some(max) = args.first().as_usize() else {
+                return Value::Empty.into();
+            };
+            if max == 0 {
+                Value::Number(BigDecimal::zero()).into()
+            } else {
+                (rnd * max as f64).floor().into()
+            }
+        }
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        Some(1)
+    }
+    fn min_args(&self) -> usize {
+        0
+    }
+    fn name(&self) -> &str {
+        "RANDOM"
+    }
+}
+
 #[cfg(test)]
 mod tests_functions {
     use std::fs::{self, OpenOptions};
@@ -2459,8 +2989,8 @@ mod tests_functions {
     use super::{
         Abs, Ascii, Chr, Coalece, Concat, ConcatWs, CurrentDate, Exp, Format, Greatest, If, Least,
         Left, Length, Ln, Log, Log2, Log10, Lower, Lpad, Ltrim, Now, NullIf, Operator, Pi,
-        Position, Repeat, Replace, Reverse, Right, Rpad, Rtrim, SubString, ToTimestamp, Upper,
-        User,
+        Position, Power, Random, RegexLike, RegexReplace, RegexSubstring, Repeat, Replace, Reverse,
+        Right, Round, Rpad, Rtrim, Sqrt, SubString, ToTimestamp, Upper, User,
     };
 
     fn test_func(operator: &impl Operator) -> Result<(), CvsSqlError> {
@@ -2469,7 +2999,11 @@ mod tests_functions {
         fs::remove_dir_all(&dir).ok();
         for example in operator.examples() {
             test_with_details(operator, &example.name, &example.arguments, |r| {
-                let expected_results = example.expected_results.into();
+                let expected_results = if example.expected_results == "\"\"" {
+                    Value::Str(String::new())
+                } else {
+                    example.expected_results.into()
+                };
                 if r == Some(&expected_results) {
                     true
                 } else {
@@ -2746,6 +3280,11 @@ mod tests_functions {
     }
 
     #[test]
+    fn test_power() -> Result<(), CvsSqlError> {
+        test_func(&Power {})
+    }
+
+    #[test]
     fn test_position() -> Result<(), CvsSqlError> {
         test_func(&Position {})
     }
@@ -2761,7 +3300,47 @@ mod tests_functions {
     }
 
     #[test]
+    fn test_regex_repalce() -> Result<(), CvsSqlError> {
+        test_func(&RegexReplace {})
+    }
+
+    #[test]
+    fn test_regex_like() -> Result<(), CvsSqlError> {
+        test_func(&RegexLike {})
+    }
+
+    #[test]
+    fn test_regex_substring() -> Result<(), CvsSqlError> {
+        test_func(&RegexSubstring {})
+    }
+
+    #[test]
     fn test_reverese() -> Result<(), CvsSqlError> {
         test_func(&Reverse {})
+    }
+    #[test]
+    fn test_rand() -> Result<(), CvsSqlError> {
+        test_with_details(&Random {}, "no_args", &vec![], |r| match r {
+            Some(Value::Number(num)) => num.to_f64().unwrap() > 0.0 && num.to_f64().unwrap() < 1.0,
+            _ => false,
+        })?;
+        test_with_details(&Random {}, "one_args", &vec!["20"], |r| match r {
+            Some(Value::Number(num)) => num.to_usize().unwrap() < 20,
+            _ => false,
+        })?;
+        test_with_details(&Random {}, "nan", &vec!["t"], |r| r == Some(&Value::Empty))?;
+        test_with_details(&Random {}, "neg", &vec!["-10"], |r| {
+            r == Some(&Value::Empty)
+        })
+    }
+
+    #[test]
+    fn test_round() -> Result<(), CvsSqlError> {
+        test_func(&Round {})
+    }
+
+    #[test]
+    fn test_sqrt() -> Result<(), CvsSqlError> {
+        test_func(&Sqrt {})
     }
 }
