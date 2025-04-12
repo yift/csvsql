@@ -1211,6 +1211,12 @@ impl SingleConvert for Expr {
                 Ok(Box::new(sub))
             }
             Expr::Function(func) => func.convert_single(metadata, engine),
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            } => new_case(operand, conditions, results, else_result, metadata, engine),
 
             _ => Err(CvsSqlError::ToDo(format!(
                 "Select expression like {}",
@@ -1267,5 +1273,70 @@ impl Position {
     fn new(str: Box<dyn Projection>, sub_str: Box<dyn Projection>) -> Self {
         let name = format!("POSITION({} IN {})", sub_str.name(), sub_str.name());
         Self { name, str, sub_str }
+    }
+}
+
+struct Case {
+    leafs: Vec<(Box<dyn Projection>, Box<dyn Projection>)>,
+    default: Option<Box<dyn Projection>>,
+    name: String,
+}
+fn new_case(
+    operand: &Option<Box<Expr>>,
+    conditions: &[Expr],
+    results: &[Expr],
+    else_result: &Option<Box<Expr>>,
+    metadata: &Metadata,
+    engine: &Engine,
+) -> Result<Box<dyn Projection>, CvsSqlError> {
+    if operand.is_some() {
+        return Err(CvsSqlError::Unsupported("CASE with Operand".into()));
+    }
+    if conditions.len() != results.len() {
+        return Err(CvsSqlError::Unsupported(
+            "CASE with diffrent number of conditions and results".into(),
+        ));
+    }
+    if conditions.is_empty() {
+        return Err(CvsSqlError::Unsupported("CASE without conditions".into()));
+    }
+    let mut leafs = Vec::new();
+    let mut name = "CASE ".to_string();
+    for (condition, result) in conditions.iter().zip(results.iter()) {
+        let condition = condition.convert_single(metadata, engine)?;
+        let result = result.convert_single(metadata, engine)?;
+        name = format!("{} WHEN {} THEN {} ", name, condition.name(), result.name());
+        leafs.push((condition, result));
+    }
+    let default = else_result
+        .iter()
+        .map(|e| e.convert_single(metadata, engine))
+        .next()
+        .transpose()?;
+    name = match &default {
+        Some(default) => format!("{} ELSE {}", name, default.name()),
+        None => name,
+    };
+    name = format!("{} END", name);
+    Ok(Box::new(Case {
+        leafs,
+        default,
+        name,
+    }))
+}
+impl Projection for Case {
+    fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
+        for (condition, result) in &self.leafs {
+            if condition.get(row).deref() == &Value::Bool(true) {
+                return result.get(row);
+            }
+        }
+        match &self.default {
+            Some(default) => default.get(row),
+            None => Value::Empty.into(),
+        }
+    }
+    fn name(&self) -> &str {
+        &self.name
     }
 }
