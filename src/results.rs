@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{ops::Deref, rc::Rc};
 
 use thiserror::Error;
 
@@ -96,7 +96,7 @@ pub enum ColumnIndexError {
 }
 
 pub struct ResultSet {
-    pub metadata: Metadata,
+    pub metadata: Rc<Metadata>,
     pub data: ResultsData,
 }
 impl ResultSet {
@@ -110,50 +110,3 @@ impl ResultSet {
         }
     }
 }
-
-// TODO: Add tests
-/*
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn result_name_matches_two_empty_results() {
-        let first = ResultName::root();
-        let second = ResultName::root();
-
-        assert!(first.matches(&second));
-    }
-
-    #[test]
-    fn result_name_matches_empty_results_with_full() {
-        let first = ResultName::root().append("one").append("two");
-        let second = ResultName::root();
-
-        assert!(first.matches(&second));
-    }
-
-    #[test]
-    fn result_name_matches_full_results_with_full() {
-        let first = ResultName::root().append("one").append("two");
-        let second = ResultName::root().append("two");
-
-        assert!(first.matches(&second));
-    }
-
-    #[test]
-    fn result_name_matches_full_results_with_full_other() {
-        let first = ResultName::root().append("one").append("two");
-        let second = ResultName::root().append("one").append("Two");
-
-        assert!(!first.matches(&second));
-    }
-
-    #[test]
-    fn result_name_matches_empty_results_with_full_too_short() {
-        let first = ResultName::root().append("two");
-        let second = ResultName::root().append("one").append("two");
-
-        assert!(!first.matches(&second));
-    }
-}
-*/

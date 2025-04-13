@@ -24,4 +24,7 @@ impl ResultsData {
     pub(crate) fn new(rows: Vec<DataRow>) -> Self {
         Self { rows }
     }
+    pub(crate) fn get(&self, index: usize) -> Option<&DataRow> {
+        self.rows.get(index)
+    }
 }

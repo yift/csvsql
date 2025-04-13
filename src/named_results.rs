@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use sqlparser::ast::Ident;
 
 use crate::result_set_metadata::SimpleResultSetMetadata;
@@ -13,7 +15,7 @@ pub fn alias_results(alias: &Ident, results: ResultSet) -> ResultSet {
         }
     }
 
-    let metadata = metadata.build();
+    let metadata = Rc::new(metadata.build());
     ResultSet {
         metadata,
         data: results.data,

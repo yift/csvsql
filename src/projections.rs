@@ -22,6 +22,7 @@ use itertools::Itertools;
 use sqlparser::ast::Value as AstValue;
 use std::collections::HashSet;
 use std::ops::Deref;
+use std::rc::Rc;
 
 pub(crate) trait Projection {
     fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value>;
@@ -66,6 +67,7 @@ pub fn make_projection(
         data.push(row);
     }
     let data = ResultsData::new(data);
+    let metadata = Rc::new(metadata);
     Ok(ResultSet { metadata, data })
 }
 trait Convert {

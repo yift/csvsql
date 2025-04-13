@@ -2,11 +2,11 @@ use sqlparser::ast::{
     Expr, GroupByExpr, Offset, OrderBy, Query, Select, SetExpr, Statement, TableFactor,
 };
 
-use crate::cartesian_product_results::join;
 use crate::error::CvsSqlError;
 use crate::file_results::read_file;
 use crate::filter_results::{apply_having, make_filter};
 use crate::group_by::{force_group_by, group_by};
+use crate::join::create_join;
 use crate::named_results::alias_results;
 use crate::order_by_results::order_by;
 use crate::projections::make_projection;
@@ -136,22 +136,7 @@ fn extract(
         return Err(CvsSqlError::Unsupported("SELECT without FROM".to_string()));
     }
 
-    let mut product = None;
-
-    for from in &select.from {
-        if !from.joins.is_empty() {
-            return Err(CvsSqlError::ToDo("SELECT ... JOIN".to_string()));
-        }
-        let from = from.relation.extract(engine)?;
-        product = match product {
-            None => Some(from),
-            Some(left) => Some(join(left, from)),
-        };
-    }
-
-    let Some(product) = product else {
-        return Err(CvsSqlError::Unsupported("SELECT without FROM".to_string()));
-    };
+    let product = create_join(&select.from, engine)?;
 
     let filter = make_filter(engine, &select.selection, product)?;
 

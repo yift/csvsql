@@ -50,6 +50,8 @@ pub enum WriterError {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use bigdecimal::BigDecimal;
     use bigdecimal::FromPrimitive;
 
@@ -75,7 +77,7 @@ mod tests {
             rows.push(row);
         }
         let data = ResultsData::new(rows);
-        let metadata = metadata.build();
+        let metadata = Rc::new(metadata.build());
         let mut results = ResultSet { metadata, data };
         let mut write = Vec::new();
 

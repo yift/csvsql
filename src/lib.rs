@@ -1,5 +1,4 @@
 pub mod args;
-mod cartesian_product_results;
 mod cast;
 mod dialect;
 pub mod engine;
@@ -10,6 +9,7 @@ mod file_results;
 mod filter_results;
 mod functions;
 mod group_by;
+mod join;
 mod named_results;
 mod order_by_results;
 mod projections;

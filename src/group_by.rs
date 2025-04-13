@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use sqlparser::ast::Expr;
 
@@ -18,7 +18,7 @@ pub struct GroupRow {
 }
 
 pub struct GroupedResultSet {
-    pub metadata: Metadata,
+    pub metadata: Rc<Metadata>,
     pub rows: Vec<GroupRow>,
 }
 
@@ -28,7 +28,7 @@ impl From<ResultSet> for GroupedResultSet {
             data,
             group_rows: vec![],
         });
-        let metadata = value.metadata;
+        let metadata = value.metadata.clone();
         Self {
             metadata,
             rows: rows.collect(),
@@ -79,10 +79,10 @@ pub fn group_by(
             GroupRow { data, group_rows }
         })
         .collect();
-    let metadata = Metadata::Grouped {
-        parent: Box::new(results.metadata),
+    let metadata = Rc::new(Metadata::Grouped {
+        parent: results.metadata.clone(),
         this: Box::new(metadata),
-    };
+    });
 
     Ok(GroupedResultSet { rows, metadata })
 }
@@ -101,10 +101,10 @@ pub fn force_group_by(results: ResultSet) -> GroupedResultSet {
     }];
     let metadata = SimpleResultSetMetadata::new(results.metadata.result_name().cloned());
     let metadata = Metadata::Simple(metadata);
-    let metadata = Metadata::Grouped {
-        parent: Box::new(results.metadata),
+    let metadata = Rc::new(Metadata::Grouped {
+        parent: results.metadata.clone(),
         this: Box::new(metadata),
-    };
+    });
 
     GroupedResultSet { rows, metadata }
 }

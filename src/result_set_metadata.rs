@@ -1,4 +1,7 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    rc::Rc,
+};
 
 use crate::{
     results::{Column, ColumnIndexError, Name},
@@ -9,7 +12,7 @@ pub enum Metadata {
     Simple(SimpleResultSetMetadata),
     Product(ProductResultSetMetadata),
     Grouped {
-        parent: Box<Metadata>,
+        parent: Rc<Metadata>,
         this: Box<Metadata>,
     },
 }
@@ -32,7 +35,7 @@ impl Metadata {
         match self {
             Metadata::Simple(data) => data.columns.len(),
             Metadata::Product(data) => {
-                data.left.number_of_columns() * data.right.number_of_columns()
+                data.left.number_of_columns() + data.right.number_of_columns()
             }
             Metadata::Grouped { parent: _, this } => this.number_of_columns(),
         }
@@ -44,9 +47,9 @@ impl Metadata {
             Metadata::Grouped { parent: _, this } => this.result_name(),
         }
     }
-    pub(crate) fn product(left: Self, right: Self) -> Self {
-        let left = Box::new(left);
-        let right = Box::new(right);
+    pub(crate) fn product(left: &Rc<Self>, right: &Rc<Self>) -> Self {
+        let left = left.clone();
+        let right = right.clone();
         Metadata::Product(ProductResultSetMetadata { left, right })
     }
 
@@ -55,8 +58,8 @@ impl Metadata {
     }
 }
 pub struct ProductResultSetMetadata {
-    left: Box<Metadata>,
-    right: Box<Metadata>,
+    left: Rc<Metadata>,
+    right: Rc<Metadata>,
 }
 impl ProductResultSetMetadata {
     fn column_index(

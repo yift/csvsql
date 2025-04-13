@@ -1,5 +1,6 @@
 use std::io::Error as IoError;
 use std::path::Path;
+use std::rc::Rc;
 
 use csv::ReaderBuilder;
 use sqlparser::ast::ObjectNamePart;
@@ -83,7 +84,7 @@ pub fn read_file(
         let values = DataRow::new(values);
         data.push(values);
     }
-    let metadata = metadata.build();
+    let metadata = Rc::new(metadata.build());
     let data = ResultsData::new(data);
     let results = ResultSet { metadata, data };
 
