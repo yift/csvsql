@@ -16,6 +16,7 @@ mod projections;
 mod result_set_metadata;
 pub mod results;
 mod results_data;
+mod trimmer;
 pub mod util;
 pub mod value;
 pub mod writer;

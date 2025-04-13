@@ -1658,6 +1658,7 @@ fn sql_tests() -> Result<(), CvsSqlError> {
             let output = String::from_utf8(output).unwrap();
 
             let result_file = path.join(format!("results.{}.csv", idx));
+            println!("\t looking at {:?}", result_file.file_name().unwrap());
             let expected_data = fs::read_to_string(result_file)?;
             assert_eq!(output, expected_data);
         }

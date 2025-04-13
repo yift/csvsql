@@ -1,4 +1,6 @@
-use sqlparser::ast::{GroupByExpr, OrderBy, Query, Select, SetExpr, Statement, TableFactor};
+use sqlparser::ast::{
+    Expr, GroupByExpr, Offset, OrderBy, Query, Select, SetExpr, Statement, TableFactor,
+};
 
 use crate::cartesian_product_results::join;
 use crate::error::CvsSqlError;
@@ -8,6 +10,7 @@ use crate::group_by::{force_group_by, group_by};
 use crate::named_results::alias_results;
 use crate::order_by_results::order_by;
 use crate::projections::make_projection;
+use crate::trimmer::trim;
 use crate::{engine::Engine, results::ResultSet};
 pub trait Extractor {
     fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError>;
@@ -45,18 +48,18 @@ impl Extractor for Query {
             return Err(CvsSqlError::Unsupported("SELECT ... SETTINGS".to_string()));
         }
         if self.format_clause.is_some() {
-            return Err(CvsSqlError::ToDo("SELECT ... FORMAT".to_string()));
-        }
-
-        if self.limit.is_some() {
-            return Err(CvsSqlError::ToDo("SELECT ... LIMIT".to_string()));
-        }
-        if self.offset.is_some() {
-            return Err(CvsSqlError::ToDo("SELECT ... OFFSET".to_string()));
+            return Err(CvsSqlError::Unsupported("SELECT ... FORMAT".to_string()));
         }
 
         match &*self.body {
-            SetExpr::Select(select) => extract(select, &self.order_by, engine, false),
+            SetExpr::Select(select) => extract(
+                select,
+                &self.order_by,
+                &self.limit,
+                &self.offset,
+                engine,
+                false,
+            ),
             SetExpr::Query(_) => Err(CvsSqlError::ToDo("SELECT (SELECT ...)".to_string())),
             SetExpr::Values(_) => Err(CvsSqlError::Unsupported("SELECT ... VALUES".to_string())),
             SetExpr::Insert(_) => Err(CvsSqlError::Unsupported("SELECT ... INSERT".to_string())),
@@ -76,6 +79,8 @@ impl Extractor for Query {
 fn extract(
     select: &Select,
     order: &Option<OrderBy>,
+    limit: &Option<Expr>,
+    offset: &Option<Offset>,
     engine: &Engine,
     force_group: bool,
 ) -> Result<ResultSet, CvsSqlError> {
@@ -172,11 +177,12 @@ fn extract(
     }
 
     order_by(engine, order, &mut group_by)?;
+    trim(limit, offset, engine, &mut group_by)?;
     match make_projection(engine, group_by, &select.projection) {
         Ok(proj) => Ok(proj),
         Err(CvsSqlError::NoGroupBy) => {
             if !force_group {
-                extract(select, order, engine, true)
+                extract(select, order, limit, offset, engine, true)
             } else {
                 Err(CvsSqlError::NoGroupBy)
             }

@@ -24,4 +24,8 @@ pub enum CvsSqlError {
     ColumnIndexError(#[from] ColumnIndexError),
     #[error("Can't aggregate without a group")]
     NoGroupBy,
+    #[error("Ofset must be a positive number")]
+    NoNumericOffset,
+    #[error("Limit must be a positive number")]
+    NoNumericLimit,
 }
