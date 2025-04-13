@@ -1,1 +1,2 @@
 SELECT "customer id", COUNT(*), SUM(price) - 1, AVG("delivery cost" * 3), MIN("tax percentage"), MAX("tax percentage"), COUNT(DISTINCT  "customer id") as one FROM tests.data.sales group by "customer id" ORDER BY "customer id";
+SELECT "customer id", COUNT(*), SUM(price) - 1, AVG("delivery cost" * 3), MIN("tax percentage"), MAX("tax percentage"), COUNT(DISTINCT  "customer id") as one FROM tests.data.sales group by "customer id" HAVING count(*) >= 4 ORDER BY "customer id";

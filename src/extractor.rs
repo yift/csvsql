@@ -5,7 +5,7 @@ use sqlparser::ast::{
 use crate::cartesian_product_results::join;
 use crate::error::CvsSqlError;
 use crate::file_results::read_file;
-use crate::filter_results::make_filter;
+use crate::filter_results::{apply_having, make_filter};
 use crate::group_by::{force_group_by, group_by};
 use crate::named_results::alias_results;
 use crate::order_by_results::order_by;
@@ -60,7 +60,7 @@ impl Extractor for Query {
                 engine,
                 false,
             ),
-            SetExpr::Query(_) => Err(CvsSqlError::ToDo("SELECT (SELECT ...)".to_string())),
+            SetExpr::Query(_) => Err(CvsSqlError::Unsupported("SELECT (SELECT ...)".to_string())),
             SetExpr::Values(_) => Err(CvsSqlError::Unsupported("SELECT ... VALUES".to_string())),
             SetExpr::Insert(_) => Err(CvsSqlError::Unsupported("SELECT ... INSERT".to_string())),
             SetExpr::Table(_) => Err(CvsSqlError::Unsupported("SELECT ... TABLE".to_string())),
@@ -166,15 +166,15 @@ fn extract(
             }
             GroupByExpr::Expressions(exp, mods) => {
                 if !mods.is_empty() {
-                    return Err(CvsSqlError::ToDo("SELECT ... GROUP BY WITH".to_string()));
+                    return Err(CvsSqlError::Unsupported(
+                        "SELECT ... GROUP BY WITH".to_string(),
+                    ));
                 }
                 group_by(engine, exp, filter)?
             }
         }
     };
-    if select.having.is_some() {
-        return Err(CvsSqlError::ToDo("SELECT ... HAVING".to_string()));
-    }
+    apply_having(engine, &select.having, &mut group_by)?;
 
     order_by(engine, order, &mut group_by)?;
     trim(limit, offset, engine, &mut group_by)?;
