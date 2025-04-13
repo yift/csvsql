@@ -5,7 +5,7 @@ use crate::error::CvsSqlError;
 use crate::group_by::{GroupRow, GroupedResultSet};
 use crate::projections::Projection;
 use crate::{engine::Engine, projections::SingleConvert};
-use sqlparser::ast::{OrderBy, OrderByExpr};
+use sqlparser::ast::{OrderBy, OrderByExpr, OrderByKind};
 
 struct OrderByItem {
     by: Box<dyn Projection>,
@@ -22,8 +22,8 @@ impl OrderByItem {
             return Err(CvsSqlError::Unsupported("ORDER BY with fill".into()));
         }
         let by = expr.expr.convert_single(&parent.metadata, engine)?;
-        let asc = expr.asc.unwrap_or(true);
-        let empty_first = expr.nulls_first.unwrap_or(false);
+        let asc = expr.options.asc.unwrap_or(true);
+        let empty_first = expr.options.nulls_first.unwrap_or(false);
 
         Ok(OrderByItem {
             by,
@@ -69,8 +69,10 @@ pub fn order_by(
     if order_by.interpolate.is_some() {
         return Err(CvsSqlError::Unsupported("interpolate ORDER BY".into()));
     }
-    let items = order_by
-        .exprs
+    let OrderByKind::Expressions(ref exprs) = order_by.kind else {
+        return Err(CvsSqlError::Unsupported("ORDER BY all".into()));
+    };
+    let items = exprs
         .iter()
         .map(|expr| OrderByItem::new(results, engine, expr))
         .collect::<Result<Vec<_>, _>>()?;

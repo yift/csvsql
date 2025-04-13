@@ -1,7 +1,7 @@
 use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
 use regex::Regex;
 use sqlparser::ast::{
-    BinaryOperator, CeilFloorKind, DateTimeField, Expr, Query, SelectItem, UnaryOperator,
+    BinaryOperator, CaseWhen, CeilFloorKind, DateTimeField, Expr, Query, SelectItem, UnaryOperator,
     WildcardAdditionalOptions,
 };
 
@@ -89,7 +89,9 @@ impl Convert for SelectItem {
                 let alias = alias.value.to_string();
                 Ok(vec![Box::new(AliasProjection { data, alias })])
             }
-            _ => Err(CvsSqlError::ToDo(format!("Select {}", self))),
+            SelectItem::QualifiedWildcard(_, _) => {
+                Err(CvsSqlError::Unsupported(format!("Select {}", self)))
+            }
         }
     }
 }
@@ -1022,7 +1024,7 @@ impl SingleConvert for Expr {
             }
             Expr::Value(val) => {
                 let name = self.to_string();
-                match val {
+                match &val.value {
                     AstValue::Number(num, _) => {
                         let value = Value::Number(num.clone());
                         Ok(Box::new(ValueProjection { value, name }))
@@ -1039,7 +1041,10 @@ impl SingleConvert for Expr {
                         value: Value::Empty,
                         name,
                     })),
-                    _ => Err(CvsSqlError::ToDo(format!("Select literal value {}", self))),
+                    _ => Err(CvsSqlError::Unsupported(format!(
+                        "Select literal value {}",
+                        self
+                    ))),
                 }
             }
             Expr::IsFalse(val) => {
@@ -1214,11 +1219,10 @@ impl SingleConvert for Expr {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
-            } => new_case(operand, conditions, results, else_result, metadata, engine),
+            } => new_case(operand, conditions, else_result, metadata, engine),
 
-            _ => Err(CvsSqlError::ToDo(format!(
+            _ => Err(CvsSqlError::Unsupported(format!(
                 "Select expression like {}",
                 self
             ))),
@@ -1283,8 +1287,7 @@ struct Case {
 }
 fn new_case(
     operand: &Option<Box<Expr>>,
-    conditions: &[Expr],
-    results: &[Expr],
+    conditions: &[CaseWhen],
     else_result: &Option<Box<Expr>>,
     metadata: &Metadata,
     engine: &Engine,
@@ -1292,19 +1295,14 @@ fn new_case(
     if operand.is_some() {
         return Err(CvsSqlError::Unsupported("CASE with Operand".into()));
     }
-    if conditions.len() != results.len() {
-        return Err(CvsSqlError::Unsupported(
-            "CASE with diffrent number of conditions and results".into(),
-        ));
-    }
     if conditions.is_empty() {
         return Err(CvsSqlError::Unsupported("CASE without conditions".into()));
     }
     let mut leafs = Vec::new();
     let mut name = "CASE ".to_string();
-    for (condition, result) in conditions.iter().zip(results.iter()) {
-        let condition = condition.convert_single(metadata, engine)?;
-        let result = result.convert_single(metadata, engine)?;
+    for condition in conditions.iter() {
+        let result = condition.result.convert_single(metadata, engine)?;
+        let condition = condition.condition.convert_single(metadata, engine)?;
         name = format!("{} WHEN {} THEN {} ", name, condition.name(), result.name());
         leafs.push((condition, result));
     }

@@ -56,13 +56,13 @@ pub fn create_cast(
         | DataType::Dec(_)
         | DataType::Float(_)
         | DataType::TinyInt(_)
-        | DataType::UnsignedTinyInt(_)
+        | DataType::TinyIntUnsigned(_)
         | DataType::Int2(_)
-        | DataType::UnsignedInt2(_)
+        | DataType::Int2Unsigned(_)
         | DataType::SmallInt(_)
-        | DataType::UnsignedSmallInt(_)
+        | DataType::SmallIntUnsigned(_)
         | DataType::MediumInt(_)
-        | DataType::UnsignedMediumInt(_)
+        | DataType::MediumIntUnsigned(_)
         | DataType::Int(_)
         | DataType::Int4(_)
         | DataType::Int8(_)
@@ -72,9 +72,9 @@ pub fn create_cast(
         | DataType::Int128
         | DataType::Int256
         | DataType::Integer(_)
-        | DataType::UnsignedInt(_)
-        | DataType::UnsignedInt4(_)
-        | DataType::UnsignedInteger(_)
+        | DataType::IntUnsigned(_)
+        | DataType::Int4Unsigned(_)
+        | DataType::IntegerUnsigned(_)
         | DataType::UInt8
         | DataType::UInt16
         | DataType::UInt32
@@ -82,14 +82,14 @@ pub fn create_cast(
         | DataType::UInt128
         | DataType::UInt256
         | DataType::BigInt(_)
-        | DataType::UnsignedBigInt(_)
-        | DataType::UnsignedInt8(_)
+        | DataType::BigIntUnsigned(_)
+        | DataType::Int8Unsigned(_)
         | DataType::Float4
         | DataType::Float32
         | DataType::Float64
         | DataType::Real
         | DataType::Float8
-        | DataType::Double
+        | DataType::Double(_)
         | DataType::DoublePrecision => AvailableDataTypes::Number,
 
         DataType::Bool | DataType::Boolean => AvailableDataTypes::Bool,

@@ -2,7 +2,7 @@ use std::io::Error as IoError;
 use std::path::Path;
 
 use csv::ReaderBuilder;
-use sqlparser::ast::Ident;
+use sqlparser::ast::ObjectNamePart;
 
 use crate::result_set_metadata::SimpleResultSetMetadata;
 use crate::results::Name;
@@ -39,7 +39,7 @@ impl AppendName for Option<Name> {
 }
 
 pub fn read_file(
-    file_name: &[Ident],
+    file_name: &[ObjectNamePart],
     root: &Path,
     first_line_as_name: bool,
 ) -> Result<ResultSet, IoError> {

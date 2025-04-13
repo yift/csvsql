@@ -197,6 +197,8 @@ impl Extractor for TableFactor {
                 with_ordinality,
                 partitions,
                 json_path,
+                sample,
+                index_hints,
             } => {
                 if args.is_some() {
                     return Err(CvsSqlError::Unsupported(
@@ -226,6 +228,16 @@ impl Extractor for TableFactor {
                 if json_path.is_some() {
                     return Err(CvsSqlError::Unsupported(
                         "SELECT ... FROM with JSON path".to_string(),
+                    ));
+                }
+                if sample.is_some() {
+                    return Err(CvsSqlError::Unsupported(
+                        "SELECT ... FROM with sample".to_string(),
+                    ));
+                }
+                if !index_hints.is_empty() {
+                    return Err(CvsSqlError::Unsupported(
+                        "SELECT ... FROM with index hints".to_string(),
                     ));
                 }
 
