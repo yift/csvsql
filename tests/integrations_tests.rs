@@ -2,7 +2,9 @@ use core::panic;
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
-    fs,
+    env,
+    fs::{self, File},
+    io::Write,
 };
 
 use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive, Zero};
@@ -1658,9 +1660,15 @@ fn sql_tests() -> Result<(), CvsSqlError> {
             let output = String::from_utf8(output).unwrap();
 
             let result_file = path.join(format!("results.{}.csv", idx));
-            println!("\t looking at {:?}", result_file.file_name().unwrap());
-            let expected_data = fs::read_to_string(result_file)?;
-            assert_eq!(output, expected_data);
+            if !result_file.exists() && env::var("CREATE_RESULTS").is_ok() {
+                println!("\t CREATING FILE {:?}", result_file.file_name().unwrap());
+                let mut file = File::create(result_file)?;
+                file.write(output.as_bytes())?;
+            } else {
+                println!("\t looking at {:?}", result_file.file_name().unwrap());
+                let expected_data = fs::read_to_string(result_file)?;
+                assert_eq!(output, expected_data);
+            }
         }
     }
     Ok(())

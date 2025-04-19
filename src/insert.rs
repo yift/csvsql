@@ -66,7 +66,7 @@ impl Extractor for Insert {
         };
 
         let current_data = read_file(engine, name)?;
-        let (file_name, _) = engine.file_name(name);
+        let file = engine.file_name(name)?;
 
         let mut columns = vec![];
         if self.columns.is_empty() {
@@ -110,7 +110,7 @@ impl Extractor for Insert {
         let metadata = Rc::new(metadata.build());
         let data = ResultsData::new(rows);
         let results = ResultSet { metadata, data };
-        let file = OpenOptions::new().append(true).open(file_name)?;
+        let file = OpenOptions::new().append(true).open(file.path)?;
         let mut writer = new_csv_writer(file);
         writer.append(&results)?;
 

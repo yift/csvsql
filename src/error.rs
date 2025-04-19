@@ -33,6 +33,10 @@ pub enum CvsSqlError {
     NoNumericLimit,
     #[error("Table `{0}` already exists.")]
     TableAlreadyExists(String),
+    #[error("Non temporary table `{0}` already exists.")]
+    NonTemporaryTableyExists(String),
+    #[error("Temporary table `{0}` already exists.")]
+    TemporaryTableyExists(String),
     #[error("Missing table name.")]
     MissingTableName,
     #[error("Nothing to insert.")]
@@ -41,4 +45,6 @@ pub enum CvsSqlError {
     InsertMismatch,
     #[error("Table `{0}` not exists.")]
     TableNotExists(String),
+    #[error("Table `{0}` not temporary.")]
+    TableNotTemporary(String),
 }

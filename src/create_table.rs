@@ -198,32 +198,30 @@ impl Extractor for CreateTable {
         if self.clone.is_some() {
             return Err(CvsSqlError::ToDo("CREATE TABLE CLONE".into()));
         }
-        if self.temporary {
-            return Err(CvsSqlError::ToDo("CREATE TEMPORARY TABLE".into()));
-        }
 
-        let (file, result_name) = engine.file_name(&self.name);
-        let Some(result_name) = result_name else {
-            return Err(CvsSqlError::MissingTableName);
+        let file = if self.temporary {
+            engine.create_temp_file(&self.name)?
+        } else {
+            engine.file_name(&self.name)?
         };
-        let file_name = file
-            .strip_prefix(&engine.home)
-            .ok()
-            .and_then(|f| f.to_str())
-            .unwrap_or_default()
-            .to_string();
-        let table_name = result_name.full_name();
-        if file.exists() {
+        if file.is_temp && !self.temporary {
+            return Err(CvsSqlError::TemporaryTableyExists(
+                file.result_name.full_name(),
+            ));
+        }
+        let file_name = engine.get_file_name(&file);
+        let table_name = file.result_name.full_name();
+        if file.exists {
             if !self.if_not_exists {
                 return Err(CvsSqlError::TableAlreadyExists(table_name));
             }
         } else {
-            if let Some(parent) = file.parent() {
+            if let Some(parent) = file.path.parent() {
                 fs::create_dir_all(parent)?;
             }
 
             if engine.first_line_as_name {
-                let mut writer = WriterBuilder::new().flexible(true).from_path(file)?;
+                let mut writer = WriterBuilder::new().flexible(true).from_path(file.path)?;
                 let mut records = vec![];
                 for col in &self.columns {
                     AvailableDataTypes::try_from(&col.data_type)?;
@@ -231,7 +229,7 @@ impl Extractor for CreateTable {
                 }
                 writer.write_record(records)?;
             } else {
-                File::create(file)?;
+                File::create(file.path)?;
             }
         }
 

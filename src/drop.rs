@@ -43,15 +43,11 @@ pub(crate) fn drop_table(
     }
     let mut files = vec![];
     for name in names {
-        let (file_name, name) = engine.file_name(name);
-        let Some(name) = name else {
-            return Err(CvsSqlError::MissingTableName);
-        };
-        let name = name.full_name();
-        if file_name.exists() {
-            files.push((file_name, name));
+        let file = engine.file_name(name)?;
+        if file.exists {
+            files.push(file);
         } else if !if_exists {
-            return Err(CvsSqlError::TableNotExists(name));
+            return Err(CvsSqlError::TableNotExists(file.result_name.full_name()));
         }
     }
     let mut metadata = SimpleResultSetMetadata::new(None);
@@ -61,16 +57,19 @@ pub(crate) fn drop_table(
     let metadata = metadata.build();
 
     let mut data = vec![];
-    for (file, name) in files {
-        fs::remove_file(&file)?;
-        let file_name = file
-            .strip_prefix(&engine.home)
-            .ok()
-            .and_then(|f| f.to_str())
-            .unwrap_or_default();
+    for file in files {
+        if file.is_temp {
+            engine.drop_temporary_table(&file)?;
+        } else {
+            if *temporary {
+                return Err(CvsSqlError::TableNotTemporary(file.result_name.full_name()));
+            }
+            fs::remove_file(&file.path)?;
+        }
+        let file_name = engine.get_file_name(&file);
         let row = vec![
             Value::Str("DROPPED".to_string()),
-            Value::Str(name),
+            Value::Str(file.result_name.full_name()),
             Value::Str(file_name.to_string()),
         ];
         let row = DataRow::new(row);

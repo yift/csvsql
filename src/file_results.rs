@@ -27,19 +27,17 @@ fn get_default_header(index: usize) -> String {
 }
 
 pub fn read_file(engine: &Engine, name: &ObjectName) -> Result<ResultSet, CvsSqlError> {
-    let (path, result_name) = engine.file_name(name);
-    if !path.exists() {
-        return Err(CvsSqlError::TableNotExists(
-            path.to_str().unwrap_or_default().to_string(),
-        ));
+    let file = engine.file_name(name)?;
+    if !file.exists {
+        return Err(CvsSqlError::TableNotExists(file.result_name.full_name()));
     }
 
     let mut reader = ReaderBuilder::new()
         .flexible(true)
         .has_headers(engine.first_line_as_name)
-        .from_path(path)?;
+        .from_path(file.path)?;
 
-    let mut metadata = SimpleResultSetMetadata::new(result_name);
+    let mut metadata = SimpleResultSetMetadata::new(Some(file.result_name));
 
     if engine.first_line_as_name {
         let header = reader.headers()?;
