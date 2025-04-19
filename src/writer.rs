@@ -7,6 +7,7 @@ use crate::results::ResultSet;
 
 pub trait Writer {
     fn write(&mut self, results: &ResultSet) -> Result<(), WriterError>;
+    fn append(&mut self, results: &ResultSet) -> Result<(), WriterError>;
 }
 
 struct CsvWriter<W: Write> {
@@ -21,6 +22,9 @@ impl<W: Write> Writer for CsvWriter<W> {
             .map(|name| name.map(|c| c.short_name()).unwrap_or_default())
             .collect();
         self.writer.write_record(&headers)?;
+        self.append(results)
+    }
+    fn append(&mut self, results: &ResultSet) -> Result<(), WriterError> {
         for row in results.data.iter() {
             let line: Vec<_> = results
                 .columns()

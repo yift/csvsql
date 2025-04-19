@@ -1,0 +1,257 @@
+use std::fs::{self, File};
+use std::rc::Rc;
+
+use csv::WriterBuilder;
+use sqlparser::ast::CreateTable;
+
+use crate::cast::AvailableDataTypes;
+use crate::engine::Engine;
+use crate::error::CvsSqlError;
+use crate::extractor::Extractor;
+use crate::result_set_metadata::{Metadata, SimpleResultSetMetadata};
+use crate::results::ResultSet;
+use crate::results_data::{DataRow, ResultsData};
+use crate::value::Value;
+
+impl Extractor for CreateTable {
+    fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
+        if self.external {
+            return Err(CvsSqlError::Unsupported("CREATE EXTERNAL TABLE".into()));
+        }
+        if self.global == Some(true) {
+            return Err(CvsSqlError::Unsupported("CREATE GLOBAL TABLE".into()));
+        }
+        if self.or_replace {
+            return Err(CvsSqlError::Unsupported("CREATE OR REPLACE".into()));
+        }
+        if self.transient {
+            return Err(CvsSqlError::Unsupported("CREATE TRANSIENT TABLE".into()));
+        }
+        if self.volatile {
+            return Err(CvsSqlError::Unsupported("CREATE VOLOTILE TABLE".into()));
+        }
+        if self.iceberg {
+            return Err(CvsSqlError::Unsupported("CREATE ICEBERG table".into()));
+        }
+        if !self.constraints.is_empty() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with constaints".into(),
+            ));
+        }
+        if !self.constraints.is_empty() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with properties".into(),
+            ));
+        }
+        if !self.with_options.is_empty() {
+            return Err(CvsSqlError::Unsupported("CREATE TABLE with options".into()));
+        }
+        if self.file_format.is_some() {
+            return Err(CvsSqlError::Unsupported("CREATE TABLE with format".into()));
+        }
+        if self.location.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with location".into(),
+            ));
+        }
+        if self.engine.is_some() {
+            return Err(CvsSqlError::Unsupported("CREATE TABLE with engine".into()));
+        }
+        if self.comment.is_some() {
+            return Err(CvsSqlError::Unsupported("CREATE TABLE with comment".into()));
+        }
+        if self.auto_increment_offset.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with auto increment offset".into(),
+            ));
+        }
+        if self.default_charset.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with default charset".into(),
+            ));
+        }
+        if self.collation.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with collation".into(),
+            ));
+        }
+        if self.on_commit.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with on commit".into(),
+            ));
+        }
+        if self.on_cluster.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with on clustert".into(),
+            ));
+        }
+        if self.primary_key.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with PRIMARY KEY".into(),
+            ));
+        }
+        if self.order_by.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with order by".into(),
+            ));
+        }
+        if self.partition_by.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with partition by".into(),
+            ));
+        }
+        if self.cluster_by.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with cluster by".into(),
+            ));
+        }
+        if self.clustered_by.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with clustered by".into(),
+            ));
+        }
+        if self.options.is_some() {
+            return Err(CvsSqlError::Unsupported("CREATE TABLE with options".into()));
+        }
+        if self.strict {
+            return Err(CvsSqlError::Unsupported("CREATE TABLE with strict".into()));
+        }
+        if self.copy_grants {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with copy grants".into(),
+            ));
+        }
+
+        if self.enable_schema_evolution.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with enable_schema_evolution".into(),
+            ));
+        }
+        if self.change_tracking.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with change_tracking".into(),
+            ));
+        }
+        if self.data_retention_time_in_days.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with data_retention_time_in_days".into(),
+            ));
+        }
+        if self.max_data_extension_time_in_days.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with max_data_extension_time_in_days".into(),
+            ));
+        }
+        if self.default_ddl_collation.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with default_ddl_collation".into(),
+            ));
+        }
+        if self.with_aggregation_policy.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with with_aggregation_policy".into(),
+            ));
+        }
+        if self.with_row_access_policy.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with with_row_access_policy".into(),
+            ));
+        }
+        if self.with_tags.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with with_tags".into(),
+            ));
+        }
+        if self.external_volume.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with external_volume".into(),
+            ));
+        }
+        if self.base_location.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with base_location".into(),
+            ));
+        }
+        if self.catalog.is_some() {
+            return Err(CvsSqlError::Unsupported("CREATE TABLE with catalog".into()));
+        }
+        if self.catalog_sync.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with catalog_sync".into(),
+            ));
+        }
+        if self.storage_serialization_policy.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with storage_serialization_policy".into(),
+            ));
+        }
+        if self.or_replace {
+            return Err(CvsSqlError::Unsupported("CREATE OR REPLACE TABLE".into()));
+        }
+
+        if self.query.is_some() {
+            return Err(CvsSqlError::ToDo("CREATE TABLE with query".into()));
+        }
+        if self.like.is_some() {
+            return Err(CvsSqlError::ToDo("CREATE TABLE LIKE".into()));
+        }
+        if self.clone.is_some() {
+            return Err(CvsSqlError::ToDo("CREATE TABLE CLONE".into()));
+        }
+        if self.temporary {
+            return Err(CvsSqlError::ToDo("CREATE TEMPORARY TABLE".into()));
+        }
+
+        let (file, result_name) = engine.file_name(&self.name);
+        let Some(result_name) = result_name else {
+            return Err(CvsSqlError::MissingTableName);
+        };
+        let file_name = file
+            .strip_prefix(&engine.home)
+            .ok()
+            .and_then(|f| f.to_str())
+            .unwrap_or_default()
+            .to_string();
+        let table_name = result_name.full_name();
+        if file.exists() {
+            if !self.if_not_exists {
+                return Err(CvsSqlError::TableAlreadyExists(table_name));
+            }
+        } else {
+            if let Some(parent) = file.parent() {
+                fs::create_dir_all(parent)?;
+            }
+
+            if engine.first_line_as_name {
+                let mut writer = WriterBuilder::new().flexible(true).from_path(file)?;
+                let mut records = vec![];
+                for col in &self.columns {
+                    AvailableDataTypes::try_from(&col.data_type)?;
+                    records.push(col.name.to_string());
+                }
+                writer.write_record(records)?;
+            } else {
+                File::create(file)?;
+            }
+        }
+
+        let mut metadata = SimpleResultSetMetadata::new(None);
+        metadata.add_column("action");
+        metadata.add_column("table");
+        metadata.add_column("file");
+        let metadata = Metadata::Simple(metadata);
+
+        let row = vec![
+            Value::Str("CREATED".to_string()),
+            Value::Str(table_name),
+            Value::Str(file_name),
+        ];
+        let row = DataRow::new(row);
+        let data = vec![row];
+        let data = ResultsData::new(data);
+        let metadata = Rc::new(metadata);
+        let results = ResultSet { metadata, data };
+
+        Ok(results)
+    }
+}

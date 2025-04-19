@@ -1,14 +1,18 @@
 pub mod args;
 mod cast;
+mod create_table;
 mod dialect;
+mod drop;
 pub mod engine;
 pub mod error;
 mod extract_time;
+mod extract_values;
 mod extractor;
 mod file_results;
 mod filter_results;
 mod functions;
 mod group_by;
+mod insert;
 mod join;
 mod named_results;
 mod order_by_results;

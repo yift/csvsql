@@ -1,3 +1,4 @@
+use csv::Error as CsvError;
 use sqlparser::parser::ParserError;
 use std::io::Error as IoError;
 use thiserror::Error;
@@ -14,6 +15,8 @@ pub enum CvsSqlError {
     WriterError(#[from] WriterError),
     #[error("IO Error: `{0}`")]
     IoError(#[from] IoError),
+    #[error("CSV Error: `{0}`")]
+    CsvError(#[from] CsvError),
     #[error("Unsupported: `{0}`")]
     Unsupported(String),
     #[error("TODO: `{0}`")]
@@ -28,4 +31,14 @@ pub enum CvsSqlError {
     NoNumericOffset,
     #[error("Limit must be a positive number")]
     NoNumericLimit,
+    #[error("Table `{0}` already exists.")]
+    TableAlreadyExists(String),
+    #[error("Missing table name.")]
+    MissingTableName,
+    #[error("Nothing to insert.")]
+    NoInsertSource,
+    #[error("Number of column to insert should match the number of columns in the source.")]
+    InsertMismatch,
+    #[error("Table `{0}` not exists.")]
+    TableNotExists(String),
 }

@@ -1,12 +1,11 @@
-use std::io::Error as IoError;
-use std::path::Path;
 use std::rc::Rc;
 
 use csv::ReaderBuilder;
-use sqlparser::ast::ObjectNamePart;
+use sqlparser::ast::ObjectName;
 
+use crate::engine::Engine;
+use crate::error::CvsSqlError;
 use crate::result_set_metadata::SimpleResultSetMetadata;
-use crate::results::Name;
 use crate::results_data::{DataRow, ResultsData};
 use crate::{results::ResultSet, value::Value};
 
@@ -27,44 +26,22 @@ fn get_default_header(index: usize) -> String {
     title
 }
 
-trait AppendName {
-    fn append(&self, name: &str) -> Self;
-}
-impl AppendName for Option<Name> {
-    fn append(&self, name: &str) -> Self {
-        match self {
-            None => Some(name.into()),
-            Some(parent) => Some(parent.append(name)),
-        }
-    }
-}
-
-pub fn read_file(
-    file_name: &[ObjectNamePart],
-    root: &Path,
-    first_line_as_name: bool,
-) -> Result<ResultSet, IoError> {
-    let mut file_names = file_name.iter().peekable();
-    let mut path = root.to_path_buf();
-    let mut result_name = None;
-    while let Some(name) = file_names.next() {
-        let name = name.to_string();
-        result_name = result_name.append(&name);
-        if file_names.peek().is_none() {
-            path = path.join(format!("{}.csv", name));
-        } else {
-            path = path.join(name);
-        }
+pub fn read_file(engine: &Engine, name: &ObjectName) -> Result<ResultSet, CvsSqlError> {
+    let (path, result_name) = engine.file_name(name);
+    if !path.exists() {
+        return Err(CvsSqlError::TableNotExists(
+            path.to_str().unwrap_or_default().to_string(),
+        ));
     }
 
     let mut reader = ReaderBuilder::new()
         .flexible(true)
-        .has_headers(first_line_as_name)
+        .has_headers(engine.first_line_as_name)
         .from_path(path)?;
 
     let mut metadata = SimpleResultSetMetadata::new(result_name);
 
-    if first_line_as_name {
+    if engine.first_line_as_name {
         let header = reader.headers()?;
         for h in header {
             metadata.add_column(h);

@@ -1,0 +1,85 @@
+use std::{fs, rc::Rc};
+
+use sqlparser::ast::{ObjectName, ObjectType};
+
+use crate::{
+    engine::Engine,
+    error::CvsSqlError,
+    result_set_metadata::SimpleResultSetMetadata,
+    results::ResultSet,
+    results_data::{DataRow, ResultsData},
+    value::Value,
+};
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn drop_table(
+    engine: &Engine,
+    object_type: &ObjectType,
+    if_exists: &bool,
+    names: &[ObjectName],
+    cascade: &bool,
+    restrict: &bool,
+    purge: &bool,
+    temporary: &bool,
+) -> Result<ResultSet, CvsSqlError> {
+    if object_type != &ObjectType::Table {
+        return Err(CvsSqlError::Unsupported(format!("DROP {}", object_type)));
+    }
+    if names.is_empty() {
+        return Err(CvsSqlError::Unsupported("DROP without tables".to_string()));
+    }
+    if *cascade {
+        return Err(CvsSqlError::Unsupported("DROP CASCADE".to_string()));
+    }
+    if *restrict {
+        return Err(CvsSqlError::Unsupported("DROP RESTRICT".to_string()));
+    }
+    if *purge {
+        return Err(CvsSqlError::Unsupported("DROP PURGE".to_string()));
+    }
+
+    if *temporary {
+        return Err(CvsSqlError::ToDo("DROP TEMP TABLE".to_string()));
+    }
+    let mut files = vec![];
+    for name in names {
+        let (file_name, name) = engine.file_name(name);
+        let Some(name) = name else {
+            return Err(CvsSqlError::MissingTableName);
+        };
+        let name = name.full_name();
+        if file_name.exists() {
+            files.push((file_name, name));
+        } else if !if_exists {
+            return Err(CvsSqlError::TableNotExists(name));
+        }
+    }
+    let mut metadata = SimpleResultSetMetadata::new(None);
+    metadata.add_column("action");
+    metadata.add_column("table");
+    metadata.add_column("file");
+    let metadata = metadata.build();
+
+    let mut data = vec![];
+    for (file, name) in files {
+        fs::remove_file(&file)?;
+        let file_name = file
+            .strip_prefix(&engine.home)
+            .ok()
+            .and_then(|f| f.to_str())
+            .unwrap_or_default();
+        let row = vec![
+            Value::Str("DROPPED".to_string()),
+            Value::Str(name),
+            Value::Str(file_name.to_string()),
+        ];
+        let row = DataRow::new(row);
+        data.push(row);
+    }
+
+    let data = ResultsData::new(data);
+    let metadata = Rc::new(metadata);
+    let results = ResultSet { metadata, data };
+
+    Ok(results)
+}

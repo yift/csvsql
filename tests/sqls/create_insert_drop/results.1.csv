@@ -1,0 +1,2 @@
+action,table,file
+CREATED,target.tests.integration.create_insert_drop,target/tests/integration/create_insert_drop.csv

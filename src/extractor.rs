@@ -2,6 +2,7 @@ use sqlparser::ast::{
     Expr, GroupByExpr, Offset, OrderBy, Query, Select, SetExpr, Statement, TableFactor,
 };
 
+use crate::drop::drop_table;
 use crate::error::CvsSqlError;
 use crate::file_results::read_file;
 use crate::filter_results::{apply_having, make_filter};
@@ -20,6 +21,26 @@ impl Extractor for Statement {
     fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
         match self {
             Statement::Query(query) => query.extract(engine),
+            Statement::CreateTable(table) => table.extract(engine),
+            Statement::Insert(insert) => insert.extract(engine),
+            Statement::Drop {
+                object_type,
+                if_exists,
+                names,
+                cascade,
+                restrict,
+                purge,
+                temporary,
+            } => drop_table(
+                engine,
+                object_type,
+                if_exists,
+                names,
+                cascade,
+                restrict,
+                purge,
+                temporary,
+            ),
             _ => Err(CvsSqlError::Unsupported(self.to_string())),
         }
     }
@@ -61,7 +82,7 @@ impl Extractor for Query {
                 false,
             ),
             SetExpr::Query(_) => Err(CvsSqlError::Unsupported("SELECT (SELECT ...)".to_string())),
-            SetExpr::Values(_) => Err(CvsSqlError::Unsupported("SELECT ... VALUES".to_string())),
+            SetExpr::Values(values) => values.extract(engine),
             SetExpr::Insert(_) => Err(CvsSqlError::Unsupported("SELECT ... INSERT".to_string())),
             SetExpr::Table(_) => Err(CvsSqlError::Unsupported("SELECT ... TABLE".to_string())),
             SetExpr::Update(_) => Err(CvsSqlError::Unsupported("SELECT ... UPDATE".to_string())),
@@ -232,7 +253,7 @@ impl Extractor for TableFactor {
                     ));
                 }
 
-                let results = read_file(&name.0, &engine.home, engine.first_line_as_name)?;
+                let results = read_file(engine, name)?;
                 if let Some(alias) = alias {
                     if !alias.columns.is_empty() {
                         return Err(CvsSqlError::Unsupported(

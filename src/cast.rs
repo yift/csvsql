@@ -28,81 +28,87 @@ impl Projection for Cast {
     }
 }
 
+impl TryFrom<&DataType> for AvailableDataTypes {
+    type Error = CvsSqlError;
+    fn try_from(value: &DataType) -> Result<Self, Self::Error> {
+        match value {
+            DataType::Character(_)
+            | DataType::Char(_)
+            | DataType::CharacterVarying(_)
+            | DataType::CharVarying(_)
+            | DataType::Varchar(_)
+            | DataType::Nvarchar(_)
+            | DataType::String(_)
+            | DataType::FixedString(_)
+            | DataType::LongText
+            | DataType::MediumText
+            | DataType::TinyText
+            | DataType::Text
+            | DataType::CharacterLargeObject(_)
+            | DataType::CharLargeObject(_)
+            | DataType::Clob(_) => Ok(AvailableDataTypes::Str),
+
+            DataType::Numeric(_)
+            | DataType::Decimal(_)
+            | DataType::BigNumeric(_)
+            | DataType::BigDecimal(_)
+            | DataType::Dec(_)
+            | DataType::Float(_)
+            | DataType::TinyInt(_)
+            | DataType::TinyIntUnsigned(_)
+            | DataType::Int2(_)
+            | DataType::Int2Unsigned(_)
+            | DataType::SmallInt(_)
+            | DataType::SmallIntUnsigned(_)
+            | DataType::MediumInt(_)
+            | DataType::MediumIntUnsigned(_)
+            | DataType::Int(_)
+            | DataType::Int4(_)
+            | DataType::Int8(_)
+            | DataType::Int16
+            | DataType::Int32
+            | DataType::Int64
+            | DataType::Int128
+            | DataType::Int256
+            | DataType::Integer(_)
+            | DataType::IntUnsigned(_)
+            | DataType::Int4Unsigned(_)
+            | DataType::IntegerUnsigned(_)
+            | DataType::UInt8
+            | DataType::UInt16
+            | DataType::UInt32
+            | DataType::UInt64
+            | DataType::UInt128
+            | DataType::UInt256
+            | DataType::BigInt(_)
+            | DataType::BigIntUnsigned(_)
+            | DataType::Int8Unsigned(_)
+            | DataType::Float4
+            | DataType::Float32
+            | DataType::Float64
+            | DataType::Real
+            | DataType::Float8
+            | DataType::Double(_)
+            | DataType::DoublePrecision => Ok(AvailableDataTypes::Number),
+
+            DataType::Bool | DataType::Boolean => Ok(AvailableDataTypes::Bool),
+
+            DataType::Date | DataType::Date32 => Ok(AvailableDataTypes::Date),
+
+            DataType::Time(_, _)
+            | DataType::Datetime(_)
+            | DataType::Datetime64(_, _)
+            | DataType::Timestamp(_, _) => Ok(AvailableDataTypes::Timestamp),
+
+            _ => Err(CvsSqlError::Unsupported(format!("data type {}", value))),
+        }
+    }
+}
 pub fn create_cast(
     data_type: &DataType,
     to_cast: Box<dyn Projection>,
 ) -> Result<Box<dyn Projection>, CvsSqlError> {
-    let data_type = match data_type {
-        DataType::Character(_)
-        | DataType::Char(_)
-        | DataType::CharacterVarying(_)
-        | DataType::CharVarying(_)
-        | DataType::Varchar(_)
-        | DataType::Nvarchar(_)
-        | DataType::String(_)
-        | DataType::FixedString(_)
-        | DataType::LongText
-        | DataType::MediumText
-        | DataType::TinyText
-        | DataType::Text
-        | DataType::CharacterLargeObject(_)
-        | DataType::CharLargeObject(_)
-        | DataType::Clob(_) => AvailableDataTypes::Str,
-
-        DataType::Numeric(_)
-        | DataType::Decimal(_)
-        | DataType::BigNumeric(_)
-        | DataType::BigDecimal(_)
-        | DataType::Dec(_)
-        | DataType::Float(_)
-        | DataType::TinyInt(_)
-        | DataType::TinyIntUnsigned(_)
-        | DataType::Int2(_)
-        | DataType::Int2Unsigned(_)
-        | DataType::SmallInt(_)
-        | DataType::SmallIntUnsigned(_)
-        | DataType::MediumInt(_)
-        | DataType::MediumIntUnsigned(_)
-        | DataType::Int(_)
-        | DataType::Int4(_)
-        | DataType::Int8(_)
-        | DataType::Int16
-        | DataType::Int32
-        | DataType::Int64
-        | DataType::Int128
-        | DataType::Int256
-        | DataType::Integer(_)
-        | DataType::IntUnsigned(_)
-        | DataType::Int4Unsigned(_)
-        | DataType::IntegerUnsigned(_)
-        | DataType::UInt8
-        | DataType::UInt16
-        | DataType::UInt32
-        | DataType::UInt64
-        | DataType::UInt128
-        | DataType::UInt256
-        | DataType::BigInt(_)
-        | DataType::BigIntUnsigned(_)
-        | DataType::Int8Unsigned(_)
-        | DataType::Float4
-        | DataType::Float32
-        | DataType::Float64
-        | DataType::Real
-        | DataType::Float8
-        | DataType::Double(_)
-        | DataType::DoublePrecision => AvailableDataTypes::Number,
-
-        DataType::Bool | DataType::Boolean => AvailableDataTypes::Bool,
-
-        DataType::Date | DataType::Date32 => AvailableDataTypes::Date,
-
-        DataType::Time(_, _)
-        | DataType::Datetime(_)
-        | DataType::Datetime64(_, _)
-        | DataType::Timestamp(_, _) => AvailableDataTypes::Timestamp,
-
-        _ => return Err(CvsSqlError::Unsupported(format!("CAST to {}", data_type))),
-    };
+    let data_type = AvailableDataTypes::try_from(data_type)?;
     let name = format!("TRY_CAST({} AS {})", to_cast.name(), data_type.name());
 
     Ok(Box::new(Cast {
@@ -112,7 +118,7 @@ pub fn create_cast(
     }))
 }
 
-enum AvailableDataTypes {
+pub(crate) enum AvailableDataTypes {
     Str,
     Number,
     Bool,
