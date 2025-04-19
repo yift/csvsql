@@ -47,4 +47,6 @@ pub enum CvsSqlError {
     TableNotExists(String),
     #[error("Table `{0}` not temporary.")]
     TableNotTemporary(String),
+    #[error("Table `{0}` missing structure.")]
+    NoTableStructuye(String),
 }

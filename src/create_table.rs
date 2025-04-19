@@ -1,17 +1,18 @@
 use std::fs::{self, File};
 use std::rc::Rc;
 
-use csv::WriterBuilder;
 use sqlparser::ast::CreateTable;
 
 use crate::cast::AvailableDataTypes;
 use crate::engine::Engine;
 use crate::error::CvsSqlError;
 use crate::extractor::Extractor;
+use crate::file_results::read_file;
 use crate::result_set_metadata::{Metadata, SimpleResultSetMetadata};
 use crate::results::ResultSet;
 use crate::results_data::{DataRow, ResultsData};
 use crate::value::Value;
+use crate::writer::{Writer, new_csv_writer};
 
 impl Extractor for CreateTable {
     fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
@@ -189,16 +190,6 @@ impl Extractor for CreateTable {
             return Err(CvsSqlError::Unsupported("CREATE OR REPLACE TABLE".into()));
         }
 
-        if self.query.is_some() {
-            return Err(CvsSqlError::ToDo("CREATE TABLE with query".into()));
-        }
-        if self.like.is_some() {
-            return Err(CvsSqlError::ToDo("CREATE TABLE LIKE".into()));
-        }
-        if self.clone.is_some() {
-            return Err(CvsSqlError::ToDo("CREATE TABLE CLONE".into()));
-        }
-
         let file = if self.temporary {
             engine.create_temp_file(&self.name)?
         } else {
@@ -209,6 +200,31 @@ impl Extractor for CreateTable {
                 file.result_name.full_name(),
             ));
         }
+        let data = if !self.columns.is_empty() {
+            let mut metadata = SimpleResultSetMetadata::new(None);
+            for col in &self.columns {
+                AvailableDataTypes::try_from(&col.data_type)?;
+                metadata.add_column(&col.name.to_string());
+            }
+            let metadata = Rc::new(metadata.build());
+            ResultSet {
+                metadata,
+                data: ResultsData::new(vec![]),
+            }
+        } else if let Some(query) = &self.query {
+            query.extract(engine)?
+        } else if let Some(like) = &self.like {
+            let data = read_file(engine, like)?;
+            ResultSet {
+                metadata: data.metadata.clone(),
+                data: ResultsData::new(vec![]),
+            }
+        } else if let Some(clone) = &self.clone {
+            read_file(engine, clone)?
+        } else {
+            return Err(CvsSqlError::NoTableStructuye(file.result_name.full_name()));
+        };
+
         let file_name = engine.get_file_name(&file);
         let table_name = file.result_name.full_name();
         if file.exists {
@@ -219,17 +235,12 @@ impl Extractor for CreateTable {
             if let Some(parent) = file.path.parent() {
                 fs::create_dir_all(parent)?;
             }
-
+            let writer = File::create(file.path)?;
+            let mut writer = new_csv_writer(writer);
             if engine.first_line_as_name {
-                let mut writer = WriterBuilder::new().flexible(true).from_path(file.path)?;
-                let mut records = vec![];
-                for col in &self.columns {
-                    AvailableDataTypes::try_from(&col.data_type)?;
-                    records.push(col.name.to_string());
-                }
-                writer.write_record(records)?;
+                writer.write(&data)?;
             } else {
-                File::create(file.path)?;
+                writer.append(&data)?;
             }
         }
 
