@@ -38,9 +38,6 @@ pub(crate) fn drop_table(
         return Err(CvsSqlError::Unsupported("DROP PURGE".to_string()));
     }
 
-    if *temporary {
-        return Err(CvsSqlError::ToDo("DROP TEMP TABLE".to_string()));
-    }
     let mut files = vec![];
     for name in names {
         let file = engine.file_name(name)?;
