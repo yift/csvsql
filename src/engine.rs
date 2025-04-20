@@ -64,7 +64,7 @@ impl Engine {
             .file_stem()
             .and_then(|f| f.to_str())
             .unwrap_or_default();
-        format!("{}> ", name)
+        format!("{} ", name)
     }
 
     pub(crate) fn file_name(&self, name: &ObjectName) -> Result<FoundFile, CvsSqlError> {

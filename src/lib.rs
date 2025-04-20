@@ -1,5 +1,6 @@
 pub mod args;
 mod cast;
+pub mod console;
 mod create_table;
 mod delete;
 mod dialect;
