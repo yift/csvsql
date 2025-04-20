@@ -22,6 +22,7 @@ pub mod results;
 mod results_data;
 pub mod session;
 mod trimmer;
+mod update;
 pub mod util;
 pub mod value;
 pub mod writer;

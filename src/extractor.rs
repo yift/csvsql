@@ -12,6 +12,7 @@ use crate::named_results::alias_results;
 use crate::order_by_results::order_by;
 use crate::projections::make_projection;
 use crate::trimmer::trim;
+use crate::update::update_table;
 use crate::{engine::Engine, results::ResultSet};
 pub trait Extractor {
     fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError>;
@@ -23,6 +24,14 @@ impl Extractor for Statement {
             Statement::Query(query) => query.extract(engine),
             Statement::CreateTable(table) => table.extract(engine),
             Statement::Insert(insert) => insert.extract(engine),
+            Statement::Update {
+                table,
+                assignments,
+                from: _,
+                selection,
+                returning,
+                or,
+            } => update_table(engine, table, assignments, selection, returning, or),
             Statement::Drop {
                 object_type,
                 if_exists,

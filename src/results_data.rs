@@ -10,6 +10,13 @@ impl DataRow {
     pub(crate) fn new(row: Vec<Value>) -> Self {
         Self { row }
     }
+    pub(crate) fn set(&mut self, column: &Column, value: Value) {
+        let index = column.get_index();
+        if self.row.len() <= index {
+            self.row.resize(index, Value::Empty);
+        }
+        self.row[index] = value;
+    }
 }
 pub struct ResultsData {
     rows: Vec<DataRow>,

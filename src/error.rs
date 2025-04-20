@@ -49,4 +49,6 @@ pub enum CvsSqlError {
     TableNotTemporary(String),
     #[error("Table `{0}` missing structure.")]
     NoTableStructuye(String),
+    #[error("Update with multiple assignment for the same columns.")]
+    MultiplieAssignment,
 }
