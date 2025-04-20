@@ -17,6 +17,20 @@ impl DataRow {
         }
         self.row[index] = value;
     }
+    pub(crate) fn insert_at(&mut self, column: &Column, value: Value) {
+        let index = column.get_index();
+        if self.row.len() >= index {
+            self.row.insert(index, value);
+        } else {
+            self.set(column, value);
+        }
+    }
+    pub(crate) fn delete_at(&mut self, column: &Column) {
+        let index = column.get_index();
+        if self.row.len() < index {
+            self.row.remove(index);
+        }
+    }
 }
 pub struct ResultsData {
     rows: Vec<DataRow>,

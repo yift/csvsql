@@ -1,6 +1,6 @@
 use std::{ops::Deref, rc::Rc};
 
-use sqlparser::ast::ObjectName;
+use sqlparser::ast::{Ident, ObjectName};
 use thiserror::Error;
 
 use crate::{
@@ -91,6 +91,13 @@ impl From<&ObjectName> for Name {
     fn from(value: &ObjectName) -> Self {
         Self {
             elements: value.0.iter().map(|i| i.to_string()).collect(),
+        }
+    }
+}
+impl From<&Ident> for Name {
+    fn from(value: &Ident) -> Self {
+        Self {
+            elements: vec![value.value.to_string()],
         }
     }
 }

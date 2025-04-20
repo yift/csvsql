@@ -2,6 +2,7 @@ use sqlparser::ast::{
     Expr, GroupByExpr, Offset, OrderBy, Query, Select, SetExpr, Statement, TableFactor,
 };
 
+use crate::alter::alter;
 use crate::drop::drop_table;
 use crate::error::CvsSqlError;
 use crate::file_results::read_file;
@@ -51,6 +52,22 @@ impl Extractor for Statement {
                 temporary,
             ),
             Statement::Delete(delete) => delete.extract(engine),
+            Statement::AlterTable {
+                name,
+                if_exists,
+                only: _,
+                operations,
+                location,
+                on_cluster,
+            } => alter(engine, name, *if_exists, operations, location, on_cluster),
+            /*
+               engine: &Engine,
+               name: &ObjectName,
+               if_exists: bool,
+               operations: &[AlterTableOperation],
+               location: Option<HiveSetLocation>,
+               on_cluster: Option<Ident>,
+            */
             _ => Err(CvsSqlError::Unsupported(self.to_string())),
         }
     }

@@ -35,4 +35,8 @@ impl Dialect for FilesDialect {
     fn supports_limit_comma(&self) -> bool {
         true
     }
+
+    fn supports_insert_set(&self) -> bool {
+        true
+    }
 }

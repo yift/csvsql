@@ -1,3 +1,4 @@
+mod alter;
 pub mod args;
 mod cast;
 pub mod console;

@@ -55,4 +55,6 @@ pub enum CvsSqlError {
     MultiplieTableDelete,
     #[error("Nothing to delete.")]
     NothingToDelete,
+    #[error("Column `{0}` already exists.")]
+    ColumnAlreadyExists(String),
 }
