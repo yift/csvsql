@@ -50,6 +50,7 @@ impl Extractor for Statement {
                 purge,
                 temporary,
             ),
+            Statement::Delete(delete) => delete.extract(engine),
             _ => Err(CvsSqlError::Unsupported(self.to_string())),
         }
     }

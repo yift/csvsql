@@ -51,4 +51,8 @@ pub enum CvsSqlError {
     NoTableStructuye(String),
     #[error("Update with multiple assignment for the same columns.")]
     MultiplieAssignment,
+    #[error("Can not delete from more than one table.")]
+    MultiplieTableDelete,
+    #[error("Nothing to delete.")]
+    NothingToDelete,
 }

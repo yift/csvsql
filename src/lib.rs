@@ -1,6 +1,7 @@
 pub mod args;
 mod cast;
 mod create_table;
+mod delete;
 mod dialect;
 mod drop;
 pub mod engine;
