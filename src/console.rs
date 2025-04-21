@@ -70,11 +70,11 @@ fn use_readline(engine: &Engine) -> Result<(), CvsSqlError> {
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
         .with_edit_mode(edit_mode)
         .with_highlighter(highlighter);
-    let left_prompt = DefaultPromptSegment::Basic(engine.prompt());
-    let right_prompt = DefaultPromptSegment::Empty;
-    let prompt = DefaultPrompt::new(left_prompt, right_prompt);
 
     loop {
+        let left_prompt = DefaultPromptSegment::Basic(engine.prompt());
+        let right_prompt = DefaultPromptSegment::Empty;
+        let prompt = DefaultPrompt::new(left_prompt, right_prompt);
         let sig = line_editor.read_line(&prompt)?;
         match sig {
             Signal::Success(command) => match engine.execute_commands(&command) {

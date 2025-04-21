@@ -1,0 +1,2 @@
+action,table,file
+DROPPED,target.tests.integration.transactions,target/tests/integration/transactions.csv

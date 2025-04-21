@@ -47,6 +47,18 @@ pub(crate) struct FoundFile {
     pub(crate) path: PathBuf,
     pub(crate) result_name: Name,
     pub(crate) exists: bool,
+    pub(crate) original_path: Option<PathBuf>,
+}
+impl FoundFile {
+    fn get_display_path(&self) -> Option<&PathBuf> {
+        if self.is_temp {
+            None
+        } else if let Some(path) = &self.original_path {
+            Some(path)
+        } else {
+            Some(&self.path)
+        }
+    }
 }
 impl Engine {
     pub fn execute_commands(&self, sql: &str) -> Result<Vec<ResultSet>, CvsSqlError> {
@@ -64,7 +76,12 @@ impl Engine {
             .file_stem()
             .and_then(|f| f.to_str())
             .unwrap_or_default();
-        format!("{} ", name)
+        let active_transaction = if self.session.borrow().transaction.is_some() {
+            "* "
+        } else {
+            ""
+        };
+        format!("{} {}", name, active_transaction)
     }
 
     pub(crate) fn file_name(&self, name: &ObjectName) -> Result<FoundFile, CvsSqlError> {
@@ -84,6 +101,14 @@ impl Engine {
         let Some(result_name) = result_name else {
             return Err(CvsSqlError::MissingTableName);
         };
+        let original_path = if let Some(ref mut transaction) = self.session.borrow_mut().transaction
+        {
+            let original_path = path;
+            path = transaction.access_file(&original_path)?;
+            Some(original_path)
+        } else {
+            None
+        };
         let mut exists = path.exists();
         let mut is_temp = false;
         if let Some(temp_path) = self.session.borrow().get_temporary_table(&result_name) {
@@ -91,11 +116,13 @@ impl Engine {
             is_temp = true;
             exists = true;
         };
+
         Ok(FoundFile {
             is_temp,
             path,
             result_name,
             exists,
+            original_path,
         })
     }
 
@@ -127,19 +154,25 @@ impl Engine {
             path,
             result_name: non_temp.result_name,
             exists: false,
+            original_path: None,
         })
     }
     pub(crate) fn get_file_name(&self, file: &FoundFile) -> String {
-        if file.is_temp {
-            "TEMPRARY_FILE".to_string()
-        } else {
-            file.path
-                .strip_prefix(&self.home)
-                .ok()
-                .and_then(|f| f.to_str())
-                .unwrap_or_default()
-                .to_string()
-        }
+        file.get_display_path()
+            .and_then(|p| p.strip_prefix(&self.home).ok())
+            .and_then(|p| p.to_str())
+            .unwrap_or("TEMPRARY_FILE")
+            .to_string()
+    }
+
+    pub(crate) fn start_transaction(&self) -> Result<(), CvsSqlError> {
+        self.session.borrow_mut().start_transaction()
+    }
+    pub(crate) fn commit_transaction(&self) -> Result<(), CvsSqlError> {
+        self.session.borrow_mut().commit_transaction()
+    }
+    pub(crate) fn rollback_transaction(&self) -> Result<(), CvsSqlError> {
+        self.session.borrow_mut().rollback_transaction()
     }
 }
 

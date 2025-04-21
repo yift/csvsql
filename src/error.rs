@@ -57,4 +57,14 @@ pub enum CvsSqlError {
     NothingToDelete,
     #[error("Column `{0}` already exists.")]
     ColumnAlreadyExists(String),
+    #[error("There is already a transaction in progress.")]
+    TransactionInProgress,
+    #[error("There is no transaction in progress.")]
+    NoTransactionInProgress,
+    #[error("File `{0}` created after transaction started.")]
+    FileCreatedUnexpectedly(String),
+    #[error("File `{0}` changed after transaction started.")]
+    FileChangedUnexpectedly(String),
+    #[error("File `{0}` deleted after transaction started.")]
+    FileRemovedUnexpectedly(String),
 }

@@ -12,6 +12,7 @@ use crate::join::create_join;
 use crate::named_results::alias_results;
 use crate::order_by_results::order_by;
 use crate::projections::make_projection;
+use crate::transaction::{commit_transaction, rollback_transaction, start_transaction};
 use crate::trimmer::trim;
 use crate::update::update_table;
 use crate::{engine::Engine, results::ResultSet};
@@ -60,6 +61,31 @@ impl Extractor for Statement {
                 location,
                 on_cluster,
             } => alter(engine, name, *if_exists, operations, location, on_cluster),
+            Statement::StartTransaction {
+                modes,
+                begin: _,
+                transaction,
+                modifier,
+                statements,
+                exception_statements,
+                has_end_keyword: _,
+            } => start_transaction(
+                engine,
+                modes,
+                transaction,
+                modifier,
+                statements,
+                exception_statements,
+            ),
+            Statement::Commit {
+                chain: _,
+                end: _,
+                modifier,
+            } => commit_transaction(engine, modifier),
+            Statement::Rollback {
+                chain: _,
+                savepoint,
+            } => rollback_transaction(engine, savepoint),
             /*
                engine: &Engine,
                name: &ObjectName,
