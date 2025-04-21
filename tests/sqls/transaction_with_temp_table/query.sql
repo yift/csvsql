@@ -28,3 +28,7 @@ START TRANSACTION;
 ROLLBACK;
 
 SELECT * FROM table_two;
+
+CREATE TEMPORARY TABLE table_four(col TEXT);
+INSERT INTO table_four VALUES('more');
+SELECT * FROM table_four;
