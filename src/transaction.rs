@@ -197,3 +197,97 @@ pub(crate) fn rollback_transaction(
 
     Ok(results)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use crate::{args::Args, engine::Engine, error::CvsSqlError};
+
+    #[test]
+    fn test_file_change_during_transaction() -> Result<(), CvsSqlError> {
+        let working_dir = tempdir()?;
+        fs::create_dir_all(&working_dir)?;
+        let table = working_dir.path().join("tab.csv");
+        fs::write(table, "col\n1\n2\n")?;
+
+        let args = Args {
+            command: None,
+            first_line_as_name: true,
+            home: Some(working_dir.path().to_path_buf()),
+        };
+        let engine_with_transaction = Engine::try_from(&args)?;
+        engine_with_transaction.execute_commands("START TRANSACTION;")?;
+        engine_with_transaction.execute_commands("INSERT INTO tab VALUES(4);")?;
+
+        let engine_without_transaction = Engine::try_from(&args)?;
+        engine_without_transaction.execute_commands("INSERT INTO tab VALUES(5);")?;
+
+        let err = engine_with_transaction.execute_commands("COMMIT;").err();
+
+        assert!(matches!(
+            err.unwrap(),
+            CvsSqlError::FileChangedUnexpectedly(_)
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_deleted_during_transaction() -> Result<(), CvsSqlError> {
+        let working_dir = tempdir()?;
+        fs::create_dir_all(&working_dir)?;
+        let table = working_dir.path().join("tab.csv");
+        fs::write(table, "col\n1\n2\n")?;
+
+        let args = Args {
+            command: None,
+            first_line_as_name: true,
+            home: Some(working_dir.path().to_path_buf()),
+        };
+        let engine_with_transaction = Engine::try_from(&args)?;
+        engine_with_transaction.execute_commands("START TRANSACTION;")?;
+        engine_with_transaction.execute_commands("INSERT INTO tab VALUES(4);")?;
+
+        let engine_without_transaction = Engine::try_from(&args)?;
+        engine_without_transaction.execute_commands("DROP TABLE tab")?;
+
+        let err = engine_with_transaction.execute_commands("COMMIT;").err();
+
+        assert!(matches!(
+            err.unwrap(),
+            CvsSqlError::FileRemovedUnexpectedly(_)
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_created_during_transaction() -> Result<(), CvsSqlError> {
+        let working_dir = tempdir()?;
+        fs::create_dir_all(&working_dir)?;
+
+        let args = Args {
+            command: None,
+            first_line_as_name: true,
+            home: Some(working_dir.path().to_path_buf()),
+        };
+        let engine_with_transaction = Engine::try_from(&args)?;
+        engine_with_transaction.execute_commands("START TRANSACTION;")?;
+        engine_with_transaction.execute_commands("CREATE TABLE tab(a0 INT)")?;
+
+        let engine_without_transaction = Engine::try_from(&args)?;
+        engine_without_transaction.execute_commands("CREATE TABLE tab(a0 INT)")?;
+
+        let err = engine_with_transaction.execute_commands("COMMIT;").err();
+
+        assert!(matches!(
+            err.unwrap(),
+            CvsSqlError::FileCreatedUnexpectedly(_)
+        ));
+
+        Ok(())
+    }
+}

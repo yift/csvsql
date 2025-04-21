@@ -65,3 +65,101 @@ pub fn read_file(engine: &Engine, name: &ObjectName) -> Result<ResultSet, CvsSql
 
     Ok(results)
 }
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use crate::{args::Args, engine::Engine, error::CvsSqlError, results::Column};
+
+    #[test]
+    fn read_file_with_missing_headers() -> Result<(), CvsSqlError> {
+        let working_dir = tempdir()?;
+        fs::create_dir_all(&working_dir)?;
+        let table = working_dir.path().join("tab.csv");
+        fs::write(table, "col1\n1,2\n2\n")?;
+
+        let args = Args {
+            command: None,
+            first_line_as_name: true,
+            home: Some(working_dir.path().to_path_buf()),
+        };
+        let engine = Engine::try_from(&args)?;
+
+        let results = engine.execute_commands("SELECT * FROM tab")?;
+        assert_eq!(results.len(), 1);
+        let results = results.first().unwrap();
+        assert_eq!(results.metadata.number_of_columns(), 2);
+
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(0))
+                .unwrap()
+                .short_name(),
+            "col1"
+        );
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(1))
+                .unwrap()
+                .short_name(),
+            "B$"
+        );
+        assert_eq!(results.data.iter().count(), 2);
+
+        let results = engine.execute_commands("SELECT col1, B$ FROM tab")?;
+        assert_eq!(results.len(), 1);
+        let results = results.first().unwrap();
+        assert_eq!(results.data.iter().count(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn read_file_no_headers() -> Result<(), CvsSqlError> {
+        let working_dir = tempdir()?;
+        fs::create_dir_all(&working_dir)?;
+        let table = working_dir.path().join("tab.csv");
+        fs::write(table, "col1\n1,2\n2\n")?;
+
+        let args = Args {
+            command: None,
+            first_line_as_name: false,
+            home: Some(working_dir.path().to_path_buf()),
+        };
+        let engine = Engine::try_from(&args)?;
+
+        let results = engine.execute_commands("SELECT * FROM tab")?;
+        assert_eq!(results.len(), 1);
+        let results = results.first().unwrap();
+        assert_eq!(results.metadata.number_of_columns(), 2);
+
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(0))
+                .unwrap()
+                .short_name(),
+            "A$"
+        );
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(1))
+                .unwrap()
+                .short_name(),
+            "B$"
+        );
+        assert_eq!(results.data.iter().count(), 3);
+
+        let results = engine.execute_commands("SELECT A$, B$ FROM tab")?;
+        assert_eq!(results.len(), 1);
+        let results = results.first().unwrap();
+        assert_eq!(results.data.iter().count(), 3);
+
+        Ok(())
+    }
+}

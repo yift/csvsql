@@ -24,3 +24,6 @@ ALTER TABLE IF EXISTS test_alter
 
 SELECT * FROM test_alter;
 
+
+ALTER TABLE IF EXISTS not_a_real_table
+    ADD COLUMN one_more INT;

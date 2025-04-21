@@ -95,9 +95,6 @@ fn build_function_from_name(
         "RPAD" => build_function(metadata, engine, args, Box::new(Rpad {})),
         "LTRIM" => build_function(metadata, engine, args, Box::new(Ltrim {})),
         "RTRIM" => build_function(metadata, engine, args, Box::new(Rtrim {})),
-        "SUBSTRING" | "MID" | "SUBSTR" => {
-            build_function(metadata, engine, args, Box::new(SubString {}))
-        }
         "PI" => build_function(metadata, engine, args, Box::new(Pi {})),
         "RANDOM" | "RAND" => build_function(metadata, engine, args, Box::new(Random {})),
         "POSITION" | "LOCATE" => build_function(metadata, engine, args, Box::new(Position {})),
@@ -2552,117 +2549,6 @@ impl Operator for Sqrt {
     }
 }
 
-struct SubString {}
-impl Operator for SubString {
-    fn get<'a>(&'a self, args: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        let text = args.first();
-        let Some(text) = text.as_string() else {
-            return Value::Empty.into();
-        };
-
-        let start = args.get(1);
-        let Some(start) = start.as_usize() else {
-            return Value::Empty.into();
-        };
-
-        if start > text.len() {
-            return Value::Str(String::new()).into();
-        }
-        let text = &text[start - 1..];
-        let length = match args.get(2) {
-            None => text.len(),
-            Some(length) => {
-                let Some(length) = length.as_usize() else {
-                    return Value::Empty.into();
-                };
-                length
-            }
-        };
-        if length > text.len() {
-            Value::Str(text.into())
-        } else {
-            Value::Str(text[..length].to_string())
-        }
-        .into()
-    }
-
-    fn max_args(&self) -> Option<usize> {
-        Some(3)
-    }
-    fn min_args(&self) -> usize {
-        2
-    }
-    fn name(&self) -> &str {
-        "SUBSTRING"
-    }
-
-    #[cfg(test)]
-    fn examples<'a>(&'a self) -> Vec<FunctionExample<'a>> {
-        vec![
-            FunctionExample {
-                name: "start_only",
-                arguments: vec!["abcdef", "3"],
-                expected_results: "cdef",
-            },
-            FunctionExample {
-                name: "start_only_negative",
-                arguments: vec!["abcdef", "-3"],
-                expected_results: "",
-            },
-            FunctionExample {
-                name: "start_only_zero",
-                arguments: vec!["abcdef", "0"],
-                expected_results: "abcdef",
-            },
-            FunctionExample {
-                name: "start_only_one",
-                arguments: vec!["abcdef", "1"],
-                expected_results: "abcdef",
-            },
-            FunctionExample {
-                name: "start_only_large",
-                arguments: vec!["abcdef", "20"],
-                expected_results: "",
-            },
-            FunctionExample {
-                name: "start_only_not_a_number",
-                arguments: vec!["abcdef", "test"],
-                expected_results: "",
-            },
-            FunctionExample {
-                name: "start_only_not_text",
-                arguments: vec!["204234", "2"],
-                expected_results: "",
-            },
-            FunctionExample {
-                name: "start_and_length",
-                arguments: vec!["abcdef", "3", "2"],
-                expected_results: "cd",
-            },
-            FunctionExample {
-                name: "start_and_length_too_big",
-                arguments: vec!["abcdef", "3", "20"],
-                expected_results: "cdef",
-            },
-            FunctionExample {
-                name: "start_and_length_exact",
-                arguments: vec!["abcdef", "3", "4"],
-                expected_results: "cdef",
-            },
-            FunctionExample {
-                name: "start_and_length_negative",
-                arguments: vec!["abcdef", "3", "-4"],
-                expected_results: "",
-            },
-            FunctionExample {
-                name: "start_and_length_text",
-                arguments: vec!["abcdef", "3", "test"],
-                expected_results: "",
-            },
-        ]
-    }
-}
-
 struct Pi {}
 impl Operator for Pi {
     fn get<'a>(&'a self, _: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
@@ -2990,7 +2876,7 @@ mod tests_functions {
         Abs, Ascii, Chr, Coalece, Concat, ConcatWs, CurrentDate, Exp, Format, Greatest, If, Least,
         Left, Length, Ln, Log, Log2, Log10, Lower, Lpad, Ltrim, Now, NullIf, Operator, Pi,
         Position, Power, Random, RegexLike, RegexReplace, RegexSubstring, Repeat, Replace, Reverse,
-        Right, Round, Rpad, Rtrim, Sqrt, SubString, ToTimestamp, Upper, User,
+        Right, Round, Rpad, Rtrim, Sqrt, ToTimestamp, Upper, User,
     };
 
     fn test_func(operator: &impl Operator) -> Result<(), CvsSqlError> {
@@ -3218,11 +3104,6 @@ mod tests_functions {
     #[test]
     fn test_rtrim() -> Result<(), CvsSqlError> {
         test_func(&Rtrim {})
-    }
-
-    #[test]
-    fn test_substr() -> Result<(), CvsSqlError> {
-        test_func(&SubString {})
     }
 
     #[test]
