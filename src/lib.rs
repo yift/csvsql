@@ -24,6 +24,7 @@ mod result_set_metadata;
 pub mod results;
 mod results_data;
 pub mod session;
+mod table;
 mod transaction;
 mod trimmer;
 mod update;

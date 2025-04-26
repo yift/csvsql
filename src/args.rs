@@ -20,4 +20,8 @@ pub struct Args {
     /// Run with simple stdio
     #[arg(short, long, default_value_t = false)]
     pub no_console: bool,
+
+    /// Display output as CSV in console (valid only in console mode)
+    #[arg(short, long, default_value_t = false)]
+    pub display_as_csv: bool,
 }

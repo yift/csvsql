@@ -8,23 +8,28 @@ use reedline::{
 };
 
 use crate::error::CvsSqlError;
+use crate::table::draw_table;
 use crate::{
     engine::Engine,
     writer::{Writer, new_csv_writer},
 };
 
-pub fn work_on_console(engine: &Engine, no_conssole: bool) -> Result<(), CvsSqlError> {
+pub fn work_on_console(
+    engine: &Engine,
+    no_conssole: bool,
+    display_as_csv: bool,
+) -> Result<(), CvsSqlError> {
     if io::stdout().is_terminal()
         && io::stdin().is_terminal()
         && io::stderr().is_terminal()
         && !no_conssole
     {
-        use_readline(engine)
+        use_readline(engine, display_as_csv)
     } else {
         stdout(engine)
     }
 }
-fn use_readline(engine: &Engine) -> Result<(), CvsSqlError> {
+fn use_readline(engine: &Engine, display_as_csv: bool) -> Result<(), CvsSqlError> {
     let mut line_editor = Reedline::create();
     if let Some(config_dir) = dirs::config_dir() {
         let history = config_dir.join("csvsql").join(".history");
@@ -85,9 +90,13 @@ fn use_readline(engine: &Engine) -> Result<(), CvsSqlError> {
                 Err(err) => println!("Gotr error: {}", err),
                 Ok(results) => {
                     for results in results {
-                        let stdout = io::stdout().lock();
-                        let mut writer = new_csv_writer(stdout);
-                        writer.write(&results).ok();
+                        if display_as_csv {
+                            let stdout = io::stdout().lock();
+                            let mut writer = new_csv_writer(stdout);
+                            writer.write(&results).ok();
+                        } else {
+                            draw_table(&results)?
+                        }
                     }
                 }
             },
