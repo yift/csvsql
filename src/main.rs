@@ -21,7 +21,7 @@ fn main() -> Result<(), CvsSqlError> {
             }
         }
     } else {
-        work_on_console(&engine)?;
+        work_on_console(&engine, args.no_console)?;
     };
 
     Ok(())

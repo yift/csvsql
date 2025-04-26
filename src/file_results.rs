@@ -81,9 +81,9 @@ mod tests {
         fs::write(table, "col1\n1,2\n2\n")?;
 
         let args = Args {
-            command: None,
-            first_line_as_name: true,
+            first_line_as_data: false,
             home: Some(working_dir.path().to_path_buf()),
+            ..Args::default()
         };
         let engine = Engine::try_from(&args)?;
 
@@ -126,9 +126,9 @@ mod tests {
         fs::write(table, "col1\n1,2\n2\n")?;
 
         let args = Args {
-            command: None,
-            first_line_as_name: false,
+            first_line_as_data: true,
             home: Some(working_dir.path().to_path_buf()),
+            ..Args::default()
         };
         let engine = Engine::try_from(&args)?;
 

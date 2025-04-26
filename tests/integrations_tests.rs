@@ -691,11 +691,7 @@ fn get_sales() -> Vec<Sale> {
 
 #[test]
 fn test_select_all() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let results = engine.execute_commands("SELECT * FROM tests.data.customers")?;
@@ -777,11 +773,7 @@ fn test_select_all() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_select_fields() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
@@ -849,11 +841,7 @@ fn test_select_fields() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_cartesian_product() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
@@ -904,11 +892,7 @@ fn test_cartesian_product() -> Result<(), CvsSqlError> {
 }
 #[test]
 fn test_select_with_plus() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
@@ -959,11 +943,7 @@ fn test_select_with_plus() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_use_literal() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
@@ -1029,11 +1009,7 @@ fn test_use_literal() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_basic_arithmetic() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
@@ -1069,11 +1045,7 @@ fn test_basic_arithmetic() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_concat() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
@@ -1101,11 +1073,7 @@ fn test_concat() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_comparisons() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let sales = get_sales();
@@ -1176,11 +1144,7 @@ fn test_comparisons() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_boolean_arithmetic() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
@@ -1220,11 +1184,7 @@ fn test_boolean_arithmetic() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_is_null_operatorrs() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let sql = r#"
@@ -1263,11 +1223,7 @@ fn test_is_null_operatorrs() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_is_true_false() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let sql = r#"
@@ -1309,11 +1265,7 @@ fn test_is_true_false() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_in_list() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let sql = r#"
@@ -1348,11 +1300,7 @@ fn test_in_list() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_select_with_order_by() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results =
@@ -1389,11 +1337,7 @@ fn test_select_with_order_by() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_select_with_order_by_desc() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results =
@@ -1430,11 +1374,7 @@ fn test_select_with_order_by_desc() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_select_with_order_by_two_rows() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
@@ -1478,11 +1418,7 @@ fn test_select_with_order_by_two_rows() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_select_with_order_by_nulls_last() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results =
@@ -1531,11 +1467,7 @@ fn test_select_with_order_by_nulls_last() -> Result<(), CvsSqlError> {
 
 #[test]
 fn test_select_with_order_by_nulls_last_desc() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine
@@ -1583,11 +1515,7 @@ fn test_select_with_order_by_nulls_last_desc() -> Result<(), CvsSqlError> {
 }
 #[test]
 fn test_select_with_order_by_nulls_first() -> Result<(), CvsSqlError> {
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
@@ -1639,11 +1567,7 @@ fn test_select_with_order_by_nulls_first() -> Result<(), CvsSqlError> {
 fn sql_tests() -> Result<(), CvsSqlError> {
     let paths = fs::read_dir("tests/sqls/")?;
 
-    let args = Args {
-        command: None,
-        home: None,
-        first_line_as_name: true,
-    };
+    let args = Args::default();
     let engine = Engine::try_from(&args)?;
 
     for path in paths {

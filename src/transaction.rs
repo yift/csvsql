@@ -214,9 +214,8 @@ mod tests {
         fs::write(table, "col\n1\n2\n")?;
 
         let args = Args {
-            command: None,
-            first_line_as_name: true,
             home: Some(working_dir.path().to_path_buf()),
+            ..Args::default()
         };
         let engine_with_transaction = Engine::try_from(&args)?;
         engine_with_transaction.execute_commands("START TRANSACTION;")?;
@@ -243,9 +242,8 @@ mod tests {
         fs::write(table, "col\n1\n2\n")?;
 
         let args = Args {
-            command: None,
-            first_line_as_name: true,
             home: Some(working_dir.path().to_path_buf()),
+            ..Args::default()
         };
         let engine_with_transaction = Engine::try_from(&args)?;
         engine_with_transaction.execute_commands("START TRANSACTION;")?;
@@ -270,9 +268,8 @@ mod tests {
         fs::create_dir_all(&working_dir)?;
 
         let args = Args {
-            command: None,
-            first_line_as_name: true,
             home: Some(working_dir.path().to_path_buf()),
+            ..Args::default()
         };
         let engine_with_transaction = Engine::try_from(&args)?;
         engine_with_transaction.execute_commands("START TRANSACTION;")?;

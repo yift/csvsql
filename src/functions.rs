@@ -554,11 +554,7 @@ mod test_aggregations {
             table_name
         );
 
-        let args = Args {
-            command: None,
-            home: None,
-            first_line_as_name: true,
-        };
+        let args = Args::default();
         let engine = Engine::try_from(&args)?;
 
         let results = engine.execute_commands(&sql)?;
@@ -2943,11 +2939,7 @@ mod tests_functions {
             table_name
         );
 
-        let args = Args {
-            command: None,
-            home: None,
-            first_line_as_name: true,
-        };
+        let args = Args::default();
         let engine = Engine::try_from(&args)?;
 
         let results = engine.execute_commands(&sql)?;

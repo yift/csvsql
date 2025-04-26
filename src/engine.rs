@@ -24,7 +24,7 @@ impl TryFrom<&Args> for Engine {
             .ok_or(EngineError::NoHomeDir)?;
         Ok(Self {
             home: home.clone(),
-            first_line_as_name: args.first_line_as_name,
+            first_line_as_name: !args.first_line_as_data,
             session: RefCell::new(Session::default()),
         })
     }

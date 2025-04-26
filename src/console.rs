@@ -13,8 +13,12 @@ use crate::{
     writer::{Writer, new_csv_writer},
 };
 
-pub fn work_on_console(engine: &Engine) -> Result<(), CvsSqlError> {
-    if io::stdout().is_terminal() && io::stdin().is_terminal() && io::stderr().is_terminal() {
+pub fn work_on_console(engine: &Engine, no_conssole: bool) -> Result<(), CvsSqlError> {
+    if io::stdout().is_terminal()
+        && io::stdin().is_terminal()
+        && io::stderr().is_terminal()
+        && !no_conssole
+    {
         use_readline(engine)
     } else {
         stdout(engine)
