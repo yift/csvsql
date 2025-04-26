@@ -13,6 +13,7 @@ pub struct Engine {
     pub(crate) first_line_as_name: bool,
     pub(crate) home: PathBuf,
     session: RefCell<Session>,
+    read_only: bool,
 }
 impl TryFrom<&Args> for Engine {
     type Error = EngineError;
@@ -26,6 +27,7 @@ impl TryFrom<&Args> for Engine {
             home: home.clone(),
             first_line_as_name: !args.first_line_as_data,
             session: RefCell::new(Session::default()),
+            read_only: !args.writer_mode,
         })
     }
 }
@@ -48,6 +50,7 @@ pub(crate) struct FoundFile {
     pub(crate) result_name: Name,
     pub(crate) exists: bool,
     pub(crate) original_path: Option<PathBuf>,
+    pub(crate) read_only: bool,
 }
 impl FoundFile {
     fn get_display_path(&self) -> Option<&PathBuf> {
@@ -123,6 +126,7 @@ impl Engine {
             result_name,
             exists,
             original_path,
+            read_only: self.session.borrow().transaction.is_none() && !is_temp && self.read_only,
         })
     }
 
@@ -155,6 +159,7 @@ impl Engine {
             result_name: non_temp.result_name,
             exists: false,
             original_path: None,
+            read_only: false,
         })
     }
     pub(crate) fn get_file_name(&self, file: &FoundFile) -> String {
@@ -169,6 +174,9 @@ impl Engine {
         self.session.borrow_mut().start_transaction()
     }
     pub(crate) fn commit_transaction(&self) -> Result<(), CvsSqlError> {
+        if self.read_only {
+            return Err(CvsSqlError::ReadOnlyMode);
+        }
         self.session.borrow_mut().commit_transaction()
     }
     pub(crate) fn rollback_transaction(&self) -> Result<(), CvsSqlError> {

@@ -41,6 +41,9 @@ pub(crate) fn drop_table(
     let mut files = vec![];
     for name in names {
         let file = engine.file_name(name)?;
+        if file.read_only {
+            return Err(CvsSqlError::ReadOnlyMode);
+        }
         if file.exists {
             files.push(file);
         } else if !if_exists {

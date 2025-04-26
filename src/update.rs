@@ -62,6 +62,9 @@ pub(crate) fn update_table(
             ));
         }
     };
+    if table_file.read_only {
+        return Err(CvsSqlError::ReadOnlyMode);
+    }
 
     let current_data = table.relation.extract(engine)?;
 

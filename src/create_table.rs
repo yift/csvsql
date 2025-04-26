@@ -195,6 +195,9 @@ impl Extractor for CreateTable {
         } else {
             engine.file_name(&self.name)?
         };
+        if file.read_only {
+            return Err(CvsSqlError::ReadOnlyMode);
+        }
         if file.is_temp && !self.temporary {
             return Err(CvsSqlError::TemporaryTableyExists(
                 file.result_name.full_name(),

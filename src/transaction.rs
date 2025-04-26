@@ -214,6 +214,7 @@ mod tests {
         fs::write(table, "col\n1\n2\n")?;
 
         let args = Args {
+            writer_mode: true,
             home: Some(working_dir.path().to_path_buf()),
             ..Args::default()
         };
@@ -243,6 +244,7 @@ mod tests {
 
         let args = Args {
             home: Some(working_dir.path().to_path_buf()),
+            writer_mode: true,
             ..Args::default()
         };
         let engine_with_transaction = Engine::try_from(&args)?;
@@ -269,6 +271,7 @@ mod tests {
 
         let args = Args {
             home: Some(working_dir.path().to_path_buf()),
+            writer_mode: true,
             ..Args::default()
         };
         let engine_with_transaction = Engine::try_from(&args)?;
@@ -284,6 +287,27 @@ mod tests {
             err.unwrap(),
             CvsSqlError::FileCreatedUnexpectedly(_)
         ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_err_in_read_only_mode() -> Result<(), CvsSqlError> {
+        let working_dir = tempdir()?;
+        fs::create_dir_all(&working_dir)?;
+
+        let args = Args {
+            home: Some(working_dir.path().to_path_buf()),
+            writer_mode: false,
+            ..Args::default()
+        };
+        let engine_with_transaction = Engine::try_from(&args)?;
+        engine_with_transaction.execute_commands("START TRANSACTION;")?;
+        engine_with_transaction.execute_commands("CREATE TABLE tab(a0 INT)")?;
+
+        let err = engine_with_transaction.execute_commands("COMMIT;").err();
+
+        assert!(matches!(err.unwrap(), CvsSqlError::ReadOnlyMode));
 
         Ok(())
     }

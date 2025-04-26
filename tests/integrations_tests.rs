@@ -13,6 +13,7 @@ use csvsql::{
     args::Args, engine::Engine, error::CvsSqlError, results::Column, value::Value, writer::Writer,
     writer::new_csv_writer,
 };
+use toml::Table;
 
 struct Customer {
     id: i64,
@@ -1567,11 +1568,29 @@ fn test_select_with_order_by_nulls_first() -> Result<(), CvsSqlError> {
 fn sql_tests() -> Result<(), CvsSqlError> {
     let paths = fs::read_dir("tests/sqls/")?;
 
-    let args = Args::default();
-    let engine = Engine::try_from(&args)?;
-
     for path in paths {
         let path = path?.path();
+        let cfg_file = path.join("conf.toml");
+        let mut read_only = true;
+        if cfg_file.exists() {
+            let content = std::fs::read_to_string(cfg_file)?;
+            let cfg = content.parse::<Table>().unwrap();
+            if let Some(test_config) = cfg.get("test") {
+                if let Some(table) = test_config.as_table() {
+                    if let Some(ro) = table.get("read_only") {
+                        if let Some(ro) = ro.as_bool() {
+                            read_only = ro;
+                        }
+                    }
+                }
+            }
+        }
+        let args = Args {
+            writer_mode: !read_only,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
         println!("Testing: {:?}", path.file_name().unwrap());
         let file = path.join("query.sql");
         let sql = fs::read_to_string(file)?;

@@ -33,6 +33,8 @@ pub enum CvsSqlError {
     NoNumericLimit,
     #[error("Table `{0}` already exists.")]
     TableAlreadyExists(String),
+    #[error("Cannot write to permenent file in read only mode.")]
+    ReadOnlyMode,
     #[error("Non temporary table `{0}` already exists.")]
     NonTemporaryTableyExists(String),
     #[error("Temporary table `{0}` already exists.")]

@@ -49,4 +49,8 @@ pub struct Args {
     /// Display output as CSV in console (valid only in console mode)
     #[arg(short, long, default_value_t = false)]
     pub display_as_csv: bool,
+
+    /// Allow to modify file
+    #[arg(short, long, default_value_t = false)]
+    pub writer_mode: bool,
 }
