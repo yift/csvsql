@@ -7,29 +7,26 @@ use reedline::{
     Signal, default_emacs_keybindings,
 };
 
+use crate::engine::Engine;
 use crate::error::CvsSqlError;
-use crate::table::draw_table;
-use crate::{
-    engine::Engine,
-    writer::{Writer, new_csv_writer},
-};
+use crate::outputer::Outputer;
 
 pub fn work_on_console(
     engine: &Engine,
-    no_conssole: bool,
-    display_as_csv: bool,
+    no_console: bool,
+    outputer: Box<dyn Outputer>,
 ) -> Result<(), CvsSqlError> {
     if io::stdout().is_terminal()
         && io::stdin().is_terminal()
         && io::stderr().is_terminal()
-        && !no_conssole
+        && !no_console
     {
-        use_readline(engine, display_as_csv)
+        use_readline(engine, outputer)
     } else {
-        stdout(engine)
+        stdout(engine, outputer)
     }
 }
-fn use_readline(engine: &Engine, display_as_csv: bool) -> Result<(), CvsSqlError> {
+fn use_readline(engine: &Engine, mut outputer: Box<dyn Outputer>) -> Result<(), CvsSqlError> {
     let mut line_editor = Reedline::create();
     if let Some(config_dir) = dirs::config_dir() {
         let history = config_dir.join("csvsql").join(".history");
@@ -90,12 +87,8 @@ fn use_readline(engine: &Engine, display_as_csv: bool) -> Result<(), CvsSqlError
                 Err(err) => println!("Gotr error: {}", err),
                 Ok(results) => {
                     for results in results {
-                        if display_as_csv {
-                            let stdout = io::stdout().lock();
-                            let mut writer = new_csv_writer(stdout);
-                            writer.write(&results).ok();
-                        } else {
-                            draw_table(&results)?
+                        if let Some(out) = outputer.write(&results)? {
+                            println!("{}", out);
                         }
                     }
                 }
@@ -105,7 +98,7 @@ fn use_readline(engine: &Engine, display_as_csv: bool) -> Result<(), CvsSqlError
     }
 }
 
-fn stdout(engine: &Engine) -> Result<(), CvsSqlError> {
+fn stdout(engine: &Engine, mut outputer: Box<dyn Outputer>) -> Result<(), CvsSqlError> {
     let stdin = io::stdin();
     loop {
         let mut stdout = io::stdout().lock();
@@ -116,9 +109,9 @@ fn stdout(engine: &Engine) -> Result<(), CvsSqlError> {
             let command = line?;
 
             for results in engine.execute_commands(&command)? {
-                let stdout = io::stdout().lock();
-                let mut writer = new_csv_writer(stdout);
-                writer.write(&results)?;
+                if let Some(out) = outputer.write(&results)? {
+                    println!("{}", out);
+                }
             }
         } else {
             return Ok(());

@@ -19,6 +19,7 @@ mod insert;
 mod join;
 mod named_results;
 mod order_by_results;
+pub mod outputer;
 mod projections;
 mod result_set_metadata;
 pub mod results;

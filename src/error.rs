@@ -67,4 +67,6 @@ pub enum CvsSqlError {
     FileChangedUnexpectedly(String),
     #[error("File `{0}` deleted after transaction started.")]
     FileRemovedUnexpectedly(String),
+    #[error("Could not create output: `{0}`.")]
+    OutputCreationError(String),
 }
