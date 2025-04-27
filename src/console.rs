@@ -1,6 +1,7 @@
 use std::io::IsTerminal;
 use std::io::{self, BufRead, Write};
 
+use itertools::Itertools;
 use reedline::{
     ColumnarMenu, DefaultCompleter, DefaultPrompt, DefaultPromptSegment, Emacs, ExampleHighlighter,
     FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu,
@@ -97,7 +98,7 @@ fn use_readline(engine: &Engine, mut outputer: Box<dyn Outputer>) -> Result<(), 
             Signal::Success(command) => {
                 let command = command.replace("\\\n", "\n");
                 match engine.execute_commands(&command) {
-                    Err(err) => println!("Gotr error: {}", err),
+                    Err(err) => eprintln!("Got error: {}", err),
                     Ok(results) => {
                         for results in results {
                             if let Some(out) = outputer.write(&results)? {
@@ -114,17 +115,28 @@ fn use_readline(engine: &Engine, mut outputer: Box<dyn Outputer>) -> Result<(), 
 
 fn stdout(engine: &Engine, mut outputer: Box<dyn Outputer>) -> Result<(), CvsSqlError> {
     let stdin = io::stdin();
+    let mut command_to_execute = vec![];
     loop {
         let mut stdout = io::stdout().lock();
-        print!("{} >", engine.prompt());
+        print!("{} > ", engine.prompt());
         stdout.flush()?;
 
+        let validator = EolValidator {};
         if let Some(line) = stdin.lock().lines().next() {
             let command = line?;
-
-            for results in engine.execute_commands(&command)? {
-                if let Some(out) = outputer.write(&results)? {
-                    println!("{}", out);
+            command_to_execute.push(command.to_string());
+            if let ValidationResult::Complete = validator.validate(&command) {
+                let command = command_to_execute.iter().join("\n").replace("\\\n", "\n");
+                command_to_execute.clear();
+                match engine.execute_commands(&command) {
+                    Ok(results) => {
+                        for results in results {
+                            if let Some(out) = outputer.write(&results)? {
+                                println!("{}", out);
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("Got error: {}", e),
                 }
             }
         } else {
