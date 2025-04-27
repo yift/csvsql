@@ -564,7 +564,7 @@ mod test_aggregations {
         let col = Column::from_index(0);
         let result = results
             .first()
-            .and_then(|d| d.data.iter().next())
+            .and_then(|d| d.results.data.iter().next())
             .map(|d| d.get(&col));
         let expected_results = example.expected_results.into();
         assert_eq!(result, Some(&expected_results));
@@ -2949,7 +2949,7 @@ mod tests_functions {
         let col = Column::from_index(0);
         let result = results
             .first()
-            .and_then(|d| d.data.iter().next())
+            .and_then(|d| d.results.data.iter().next())
             .map(|d| d.get(&col));
 
         assert_eq!(true, verify_results(result));

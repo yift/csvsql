@@ -1,7 +1,7 @@
 use chrono::NaiveTime;
 use rust_xlsxwriter::workbook::Workbook;
 use rust_xlsxwriter::{ExcelDateTime, Format, XlsxError};
-use serde_json::{Number, Value as JsonValue};
+use serde_json::{Map, Number, Value as JsonValue};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufWriter, IsTerminal};
@@ -12,15 +12,14 @@ use csv::WriterBuilder;
 use std::io::Write;
 
 use crate::args::OutputFormat;
+use crate::engine::CommandExecution;
 use crate::value::Value;
 use crate::writer::Writer;
-use crate::{
-    args::Args, error::CvsSqlError, results::ResultSet, table::draw_table, writer::new_csv_writer,
-};
+use crate::{args::Args, error::CvsSqlError, table::draw_table, writer::new_csv_writer};
 use bigdecimal::ToPrimitive;
 
 pub trait Outputer {
-    fn write(&mut self, results: &ResultSet) -> Result<Option<String>, CvsSqlError>;
+    fn write(&mut self, results: &CommandExecution) -> Result<Option<String>, CvsSqlError>;
 }
 
 pub fn create_outputer(args: &Args) -> Result<Box<dyn Outputer>, CvsSqlError> {
@@ -50,18 +49,18 @@ fn create_console_output(args: &Args) -> Box<dyn Outputer> {
 }
 struct TableOutputer {}
 impl Outputer for TableOutputer {
-    fn write(&mut self, results: &ResultSet) -> Result<Option<String>, CvsSqlError> {
-        draw_table(results)?;
+    fn write(&mut self, results: &CommandExecution) -> Result<Option<String>, CvsSqlError> {
+        draw_table(&results.results)?;
         Ok(None)
     }
 }
 
 struct StdoutOutputer {}
 impl Outputer for StdoutOutputer {
-    fn write(&mut self, results: &ResultSet) -> Result<Option<String>, CvsSqlError> {
+    fn write(&mut self, results: &CommandExecution) -> Result<Option<String>, CvsSqlError> {
         let stdout = io::stdout().lock();
         let mut writer = new_csv_writer(stdout);
-        writer.write(results).ok();
+        writer.write(&results.results).ok();
         Ok(None)
     }
 }
@@ -69,6 +68,7 @@ impl Outputer for StdoutOutputer {
 struct CsvOutputer {
     index: usize,
     root: PathBuf,
+    all: PathBuf,
 }
 impl CsvOutputer {
     fn new(dir: &PathBuf) -> Result<Self, CvsSqlError> {
@@ -83,20 +83,42 @@ impl CsvOutputer {
             fs::create_dir_all(dir)?
         }
 
+        let all = dir.join("all.csv");
+        if all.exists() {
+            return Err(CvsSqlError::OutputCreationError(format!(
+                "File {} already exists",
+                all.to_str().unwrap_or_default()
+            )));
+        }
+        let header = vec!["index", "file", "sql"];
+        let mut writer = WriterBuilder::new().from_path(&all)?;
+        writer.write_record(header)?;
+        writer.flush()?;
+
         Ok(Self {
             index: 0,
             root: dir.clone(),
+            all,
         })
     }
 }
 impl Outputer for CsvOutputer {
-    fn write(&mut self, results: &ResultSet) -> Result<Option<String>, CvsSqlError> {
+    fn write(&mut self, results: &CommandExecution) -> Result<Option<String>, CvsSqlError> {
         self.index += 1;
         let file_name = format!("{}.csv", self.index);
-        let path = self.root.join(file_name);
+
+        let path = self.root.join(&file_name);
         let writer = File::create(&path)?;
         let mut writer = new_csv_writer(writer);
-        writer.write(results)?;
+        writer.write(&results.results)?;
+
+        let file = OpenOptions::new().append(true).open(&self.all)?;
+
+        let saved = vec![format!("{}", self.index), file_name, results.sql.clone()];
+        let mut writer = WriterBuilder::new().from_writer(file);
+        writer.write_record(saved)?;
+        writer.flush()?;
+
         Ok(Some(format!(
             "File {} created",
             path.to_str().unwrap_or_default()
@@ -107,6 +129,7 @@ impl Outputer for CsvOutputer {
 struct TxtOutputer {
     index: usize,
     root: PathBuf,
+    all: PathBuf,
 }
 impl TxtOutputer {
     fn new(dir: &PathBuf) -> Result<Self, CvsSqlError> {
@@ -121,36 +144,64 @@ impl TxtOutputer {
             fs::create_dir_all(dir)?
         }
 
+        let all = dir.join("all.txt");
+        if all.exists() {
+            return Err(CvsSqlError::OutputCreationError(format!(
+                "File {} already exists",
+                all.to_str().unwrap_or_default()
+            )));
+        }
+        let header = vec!["index", "file", "sql"];
+        let mut writer = WriterBuilder::new()
+            .delimiter(b'\t')
+            .quote_style(csv::QuoteStyle::Never)
+            .from_path(&all)?;
+        writer.write_record(header)?;
+        writer.flush()?;
+
         Ok(Self {
             index: 0,
             root: dir.clone(),
+            all,
         })
     }
 }
 impl Outputer for TxtOutputer {
-    fn write(&mut self, results: &ResultSet) -> Result<Option<String>, CvsSqlError> {
+    fn write(&mut self, results: &CommandExecution) -> Result<Option<String>, CvsSqlError> {
         self.index += 1;
         let file_name = format!("{}.txt", self.index);
-        let path = self.root.join(file_name);
+        let path = self.root.join(&file_name);
         let writer = File::create(&path)?;
         let mut writer = WriterBuilder::new()
             .delimiter(b'\t')
             .quote_style(csv::QuoteStyle::Never)
             .from_writer(writer);
         let headers: Vec<_> = results
+            .results
             .columns()
-            .map(|column| results.metadata.column_name(&column))
+            .map(|column| results.results.metadata.column_name(&column))
             .map(|name| name.map(|c| c.short_name()).unwrap_or_default())
             .collect();
         writer.write_record(&headers)?;
-        for row in results.data.iter() {
+        for row in results.results.data.iter() {
             let line: Vec<_> = results
+                .results
                 .columns()
                 .map(|column| row.get(&column))
                 .map(|f| f.to_string())
                 .collect();
             writer.write_record(line)?
         }
+
+        let saved = vec![format!("{}", self.index), file_name, results.sql.clone()];
+        let file = OpenOptions::new().append(true).open(&self.all)?;
+        let mut writer = WriterBuilder::new()
+            .delimiter(b'\t')
+            .quote_style(csv::QuoteStyle::Never)
+            .from_writer(file);
+        writer.write_record(saved)?;
+        writer.flush()?;
+
         Ok(Some(format!(
             "File {} created",
             path.to_str().unwrap_or_default()
@@ -159,8 +210,8 @@ impl Outputer for TxtOutputer {
 }
 
 struct HtmlOutputer {
-    index: usize,
     root: PathBuf,
+    sqls: Vec<String>,
 }
 impl HtmlOutputer {
     fn new(dir: &PathBuf) -> Result<Self, CvsSqlError> {
@@ -187,8 +238,8 @@ impl HtmlOutputer {
         writeln!(&mut writer, "</html>")?;
 
         Ok(Self {
-            index: 0,
             root: dir.clone(),
+            sqls: Vec::new(),
         })
     }
 
@@ -200,11 +251,29 @@ impl HtmlOutputer {
         writeln!(&mut writer, "<html lang='en'>")?;
         writeln!(&mut writer, "<head></head>")?;
         writeln!(&mut writer, "<body>")?;
-        writeln!(&mut writer, "<ul>")?;
-        for i in 1..self.index + 1 {
-            writeln!(&mut writer, "<li><a href={}.html>{}</a></li>", i, i)?;
+        writeln!(&mut writer, "<table style=\"width:100%\">")?;
+        writeln!(&mut writer, "<tr>")?;
+        writeln!(&mut writer, "<th>index</th>")?;
+        writeln!(&mut writer, "<th>sql</th>")?;
+        writeln!(&mut writer, "<th>results</th>")?;
+        writeln!(&mut writer, "</tr>")?;
+        for (i, sql) in self.sqls.iter().enumerate() {
+            writeln!(&mut writer, "<tr>")?;
+            writeln!(&mut writer, "<td>{}</td>", i + 1)?;
+            writeln!(
+                &mut writer,
+                "<td><code><pre>{}</pre></code></td>",
+                html_escape::encode_text(sql)
+            )?;
+            writeln!(
+                &mut writer,
+                "<td><a href={}.html>{}.html</a></td>",
+                i + 1,
+                i + 1
+            )?;
+            writeln!(&mut writer, "</tr>")?;
         }
-        writeln!(&mut writer, "</ul>")?;
+        writeln!(&mut writer, "</table>")?;
         writeln!(&mut writer, "</body>")?;
         writeln!(&mut writer, "</html>")?;
 
@@ -212,9 +281,8 @@ impl HtmlOutputer {
     }
 }
 impl Outputer for HtmlOutputer {
-    fn write(&mut self, results: &ResultSet) -> Result<Option<String>, CvsSqlError> {
-        self.index += 1;
-        let file_name = format!("{}.html", self.index);
+    fn write(&mut self, results: &CommandExecution) -> Result<Option<String>, CvsSqlError> {
+        let file_name = format!("{}.html", self.sqls.len() + 1);
         let path = self.root.join(file_name);
         let writer = File::create(&path)?;
         let mut writer = BufWriter::new(&writer);
@@ -224,8 +292,9 @@ impl Outputer for HtmlOutputer {
         writeln!(&mut writer, "<body>")?;
         writeln!(&mut writer, "<table style=\"width:100%\">")?;
         writeln!(&mut writer, "<tr>")?;
-        for col in results.columns() {
+        for col in results.results.columns() {
             let name = results
+                .results
                 .metadata
                 .column_name(&col)
                 .map(|t| t.short_name())
@@ -233,9 +302,9 @@ impl Outputer for HtmlOutputer {
             writeln!(&mut writer, "<th>{}</th>", html_escape::encode_text(name))?
         }
         writeln!(&mut writer, "</tr>")?;
-        for row in results.data.iter() {
+        for row in results.results.data.iter() {
             writeln!(&mut writer, "<tr>")?;
-            for col in results.columns() {
+            for col in results.results.columns() {
                 let data = row.get(&col).to_string();
                 writeln!(&mut writer, "<td>{}</td>", html_escape::encode_text(&data))?
             }
@@ -245,6 +314,7 @@ impl Outputer for HtmlOutputer {
         writeln!(&mut writer, "</table>")?;
         writeln!(&mut writer, "</body>")?;
         writeln!(&mut writer, "</html>")?;
+        self.sqls.push(results.sql.clone());
 
         self.update_index()?;
         Ok(Some(format!(
@@ -278,12 +348,13 @@ impl JsonOutputer {
     }
 }
 impl Outputer for JsonOutputer {
-    fn write(&mut self, results: &ResultSet) -> Result<Option<String>, CvsSqlError> {
+    fn write(&mut self, results: &CommandExecution) -> Result<Option<String>, CvsSqlError> {
         let mut data_to_write = vec![];
-        for row in results.data.iter() {
-            let mut line = HashMap::new();
-            for col in results.columns() {
+        for row in results.results.data.iter() {
+            let mut line = Map::new();
+            for col in results.results.columns() {
                 let name = results
+                    .results
                     .metadata
                     .column_name(&col)
                     .map(|f| f.short_name())
@@ -299,17 +370,20 @@ impl Outputer for JsonOutputer {
                         },
                         _ => JsonValue::String(data.to_string()),
                     };
-                    line.insert(name, data);
+                    line.insert(name.to_string(), data);
                 }
             }
-            data_to_write.push(line);
+            data_to_write.push(JsonValue::Object(line));
         }
 
         self.index += 1;
         let file_name = format!("{}.json", self.index);
         let path = self.root.join(file_name);
         let writer = File::create(&path)?;
-        match serde_json::to_writer_pretty(writer, &data_to_write) {
+        let mut data_with_sql = HashMap::new();
+        data_with_sql.insert("sql", JsonValue::String(results.sql.to_string()));
+        data_with_sql.insert("results", JsonValue::Array(data_to_write));
+        match serde_json::to_writer_pretty(writer, &data_with_sql) {
             Ok(_) => Ok(Some(format!(
                 "File {} created",
                 path.to_str().unwrap_or_default()
@@ -340,7 +414,14 @@ impl XlsxOutputer {
             }
             None => &file.with_extension("xlsx"),
         };
-        let workbook = Workbook::new();
+        let mut workbook = Workbook::new();
+
+        let bold_format = Format::new().set_bold();
+        let sqls = workbook.add_worksheet();
+        sqls.set_name("sqls")?;
+        sqls.write_string_with_format(0, 0, "SQL", &bold_format)?;
+        sqls.set_column_width(0, 65)?;
+        sqls.write_string_with_format(0, 1, "Sheet", &bold_format)?;
 
         Ok(Self {
             workbook,
@@ -348,8 +429,18 @@ impl XlsxOutputer {
         })
     }
 
-    fn add_worksheet(&mut self, results: &ResultSet) -> Result<(), XlsxError> {
+    fn add_worksheet(&mut self, execution: &CommandExecution) -> Result<(), XlsxError> {
+        let index = self.workbook.worksheets().len() as u32;
+        let name = format!("Results {}", index);
+        let sqls = self.workbook.worksheet_from_name("sqls").unwrap();
+        let monospace = Format::new().set_font_name("Courier New");
+
+        sqls.write_string_with_format(index, 0, &execution.sql, &monospace)?;
+        sqls.write_string(index, 1, &name)?;
+
+        let results = &execution.results;
         let worksheet = self.workbook.add_worksheet();
+        worksheet.set_name(name)?;
         let bold_format = Format::new().set_bold();
         let date_format = Format::new().set_num_format("yyyy-mm-dd");
         let time_format = Format::new().set_num_format("yyyy-mm-dd HH:MM:SS");
@@ -412,12 +503,16 @@ impl XlsxOutputer {
             }
         }
 
+        self.workbook
+            .worksheets_mut()
+            .swap((index - 1) as usize, index as usize);
+
         self.workbook.save(&self.path)?;
         Ok(())
     }
 }
 impl Outputer for XlsxOutputer {
-    fn write(&mut self, results: &ResultSet) -> Result<Option<String>, CvsSqlError> {
+    fn write(&mut self, results: &CommandExecution) -> Result<Option<String>, CvsSqlError> {
         match self.add_worksheet(results) {
             Ok(_) => Ok(Some(format!(
                 "Sheet was added to {}",

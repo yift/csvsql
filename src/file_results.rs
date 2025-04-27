@@ -89,7 +89,7 @@ mod tests {
 
         let results = engine.execute_commands("SELECT * FROM tab")?;
         assert_eq!(results.len(), 1);
-        let results = results.first().unwrap();
+        let results = &results.first().unwrap().results;
         assert_eq!(results.metadata.number_of_columns(), 2);
 
         assert_eq!(
@@ -112,7 +112,7 @@ mod tests {
 
         let results = engine.execute_commands("SELECT col1, B$ FROM tab")?;
         assert_eq!(results.len(), 1);
-        let results = results.first().unwrap();
+        let results = &results.first().unwrap().results;
         assert_eq!(results.data.iter().count(), 2);
 
         Ok(())
@@ -134,7 +134,7 @@ mod tests {
 
         let results = engine.execute_commands("SELECT * FROM tab")?;
         assert_eq!(results.len(), 1);
-        let results = results.first().unwrap();
+        let results = &results.first().unwrap().results;
         assert_eq!(results.metadata.number_of_columns(), 2);
 
         assert_eq!(
@@ -157,7 +157,7 @@ mod tests {
 
         let results = engine.execute_commands("SELECT A$, B$ FROM tab")?;
         assert_eq!(results.len(), 1);
-        let results = results.first().unwrap();
+        let results = &results.first().unwrap().results;
         assert_eq!(results.data.iter().count(), 3);
 
         Ok(())

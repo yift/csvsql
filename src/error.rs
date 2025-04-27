@@ -1,4 +1,5 @@
 use csv::Error as CsvError;
+use rust_xlsxwriter::XlsxError;
 use sqlparser::parser::ParserError;
 use std::io::Error as IoError;
 use thiserror::Error;
@@ -73,4 +74,6 @@ pub enum CvsSqlError {
     OutputCreationError(String),
     #[error("Can not use stdin as a table in interactive mode.")]
     StdinUnusable,
+    #[error("Xlsx Error: `{0}`")]
+    XlsxError(#[from] XlsxError),
 }

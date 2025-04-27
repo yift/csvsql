@@ -67,14 +67,20 @@ impl FoundFile {
         }
     }
 }
+pub struct CommandExecution {
+    pub sql: String,
+    pub results: ResultSet,
+}
 impl Engine {
-    pub fn execute_commands(&self, sql: &str) -> Result<Vec<ResultSet>, CvsSqlError> {
+    pub fn execute_commands(&self, sql: &str) -> Result<Vec<CommandExecution>, CvsSqlError> {
         let dialect = FilesDialect {};
-        let mut results = Vec::new();
+        let mut all_results = Vec::new();
         for statement in Parser::parse_sql(&dialect, sql)? {
-            results.push(statement.extract(self)?);
+            let sql = statement.to_string();
+            let results = statement.extract(self)?;
+            all_results.push(CommandExecution { sql, results });
         }
-        Ok(results)
+        Ok(all_results)
     }
 
     pub fn prompt(&self) -> String {

@@ -698,7 +698,7 @@ fn test_select_all() -> Result<(), CvsSqlError> {
     let results = engine.execute_commands("SELECT * FROM tests.data.customers")?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first().unwrap();
+    let results = &results.first().unwrap().results;
     assert_eq!(results.metadata.number_of_columns(), 7);
 
     assert_eq!(
@@ -782,7 +782,7 @@ fn test_select_fields() -> Result<(), CvsSqlError> {
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
     assert_eq!(results.metadata.number_of_columns(), 4);
 
     assert_eq!(
@@ -850,7 +850,7 @@ fn test_cartesian_product() -> Result<(), CvsSqlError> {
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
     assert_eq!(results.metadata.number_of_columns(), 2);
 
     assert_eq!(
@@ -901,7 +901,7 @@ fn test_select_with_plus() -> Result<(), CvsSqlError> {
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 2);
 
@@ -952,7 +952,7 @@ fn test_use_literal() -> Result<(), CvsSqlError> {
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 3);
 
@@ -1018,7 +1018,7 @@ fn test_basic_arithmetic() -> Result<(), CvsSqlError> {
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
 
     for row in results.data.iter() {
         let mut data = HashMap::new();
@@ -1054,7 +1054,7 @@ fn test_concat() -> Result<(), CvsSqlError> {
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first_mut().unwrap();
+    let results = &results.first_mut().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
@@ -1104,7 +1104,7 @@ fn test_comparisons() -> Result<(), CvsSqlError> {
     let mut results = engine.execute_commands(&sql)?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first_mut().unwrap();
+    let results = &results.first_mut().unwrap().results;
     let mut passed_reference_index = false;
 
     let mut result_iter = results.data.iter();
@@ -1153,7 +1153,7 @@ fn test_boolean_arithmetic() -> Result<(), CvsSqlError> {
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first_mut().unwrap();
+    let results = &results.first_mut().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 5);
 
@@ -1197,7 +1197,7 @@ fn test_is_null_operatorrs() -> Result<(), CvsSqlError> {
     let mut results = engine.execute_commands(sql)?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first_mut().unwrap();
+    let results = &results.first_mut().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 2);
 
@@ -1239,7 +1239,7 @@ fn test_is_true_false() -> Result<(), CvsSqlError> {
     let mut results = engine.execute_commands(sql)?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first_mut().unwrap();
+    let results = &results.first_mut().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 5);
 
@@ -1278,7 +1278,7 @@ fn test_in_list() -> Result<(), CvsSqlError> {
     let mut results = engine.execute_commands(sql)?;
 
     assert_eq!(results.len(), 1);
-    let results = results.first_mut().unwrap();
+    let results = &results.first_mut().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 2);
 
@@ -1308,7 +1308,7 @@ fn test_select_with_order_by() -> Result<(), CvsSqlError> {
         engine.execute_commands("SELECT id FROM tests.data.sales ORDER BY \"sale made\";")?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
@@ -1345,7 +1345,7 @@ fn test_select_with_order_by_desc() -> Result<(), CvsSqlError> {
         engine.execute_commands("SELECT id FROM tests.data.sales ORDER BY \"sale made\" DESC;")?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
@@ -1383,7 +1383,7 @@ fn test_select_with_order_by_two_rows() -> Result<(), CvsSqlError> {
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
@@ -1426,7 +1426,7 @@ fn test_select_with_order_by_nulls_last() -> Result<(), CvsSqlError> {
         engine.execute_commands("SELECT id FROM tests.data.sales ORDER BY \"delivered at\";")?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
@@ -1475,7 +1475,7 @@ fn test_select_with_order_by_nulls_last_desc() -> Result<(), CvsSqlError> {
         .execute_commands("SELECT id FROM tests.data.sales ORDER BY \"delivered at\" DESC;")?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
@@ -1524,7 +1524,7 @@ fn test_select_with_order_by_nulls_first() -> Result<(), CvsSqlError> {
     )?;
 
     assert_eq!(results.len(), 1);
-    let results = results.iter_mut().next().unwrap();
+    let results = &results.iter_mut().next().unwrap().results;
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
@@ -1598,7 +1598,7 @@ fn sql_tests() -> Result<(), CvsSqlError> {
             let mut output = Vec::new();
             {
                 let mut writer = new_csv_writer(&mut output);
-                writer.write(&results)?;
+                writer.write(&results.results)?;
             }
             let output = String::from_utf8(output).unwrap();
 
