@@ -4,13 +4,23 @@ use std::io::{self, BufRead, Write};
 use reedline::{
     ColumnarMenu, DefaultCompleter, DefaultPrompt, DefaultPromptSegment, Emacs, ExampleHighlighter,
     FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu,
-    Signal, default_emacs_keybindings,
+    Signal, ValidationResult, Validator, default_emacs_keybindings,
 };
 
 use crate::engine::Engine;
 use crate::error::CvsSqlError;
 use crate::outputer::Outputer;
 
+struct EolValidator {}
+impl Validator for EolValidator {
+    fn validate(&self, line: &str) -> ValidationResult {
+        if line.ends_with("\\") {
+            ValidationResult::Incomplete
+        } else {
+            ValidationResult::Complete
+        }
+    }
+}
 pub fn work_on_console(
     engine: &Engine,
     no_console: bool,
@@ -75,6 +85,7 @@ fn use_readline(engine: &Engine, mut outputer: Box<dyn Outputer>) -> Result<(), 
         .with_completer(Box::new(completer))
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
         .with_edit_mode(edit_mode)
+        .with_validator(Box::new(EolValidator {}))
         .with_highlighter(highlighter);
 
     loop {
@@ -83,16 +94,19 @@ fn use_readline(engine: &Engine, mut outputer: Box<dyn Outputer>) -> Result<(), 
         let prompt = DefaultPrompt::new(left_prompt, right_prompt);
         let sig = line_editor.read_line(&prompt)?;
         match sig {
-            Signal::Success(command) => match engine.execute_commands(&command) {
-                Err(err) => println!("Gotr error: {}", err),
-                Ok(results) => {
-                    for results in results {
-                        if let Some(out) = outputer.write(&results)? {
-                            println!("{}", out);
+            Signal::Success(command) => {
+                let command = command.replace("\\\n", "\n");
+                match engine.execute_commands(&command) {
+                    Err(err) => println!("Gotr error: {}", err),
+                    Ok(results) => {
+                        for results in results {
+                            if let Some(out) = outputer.write(&results)? {
+                                println!("{}", out);
+                            }
                         }
                     }
                 }
-            },
+            }
             Signal::CtrlD | Signal::CtrlC => return Ok(()),
         }
     }
