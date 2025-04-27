@@ -25,6 +25,7 @@ mod result_set_metadata;
 pub mod results;
 mod results_data;
 pub mod session;
+mod stdin_as_table;
 mod table;
 mod transaction;
 mod trimmer;

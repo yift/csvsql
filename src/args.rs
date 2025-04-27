@@ -22,7 +22,7 @@ pub enum OutputFormat {
 #[derive(Parser, Debug, Default)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    /// SQL command to execute.
+    /// SQL command to execute. If ommited the engine will read the command from the standart input. If set, the standard input can be used as table named '$'.
     #[arg(short, long)]
     pub command: Option<Vec<String>>,
 

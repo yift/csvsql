@@ -2,6 +2,7 @@ use crate::error::CvsSqlError;
 use crate::extractor::Extractor;
 use crate::results::Name;
 use crate::session::Session;
+use crate::stdin_as_table::{StdinReader, create_stdin_reader};
 use crate::{args::Args, dialect::FilesDialect, results::ResultSet};
 use sqlparser::ast::ObjectName;
 use sqlparser::parser::Parser;
@@ -14,6 +15,7 @@ pub struct Engine {
     pub(crate) home: PathBuf,
     session: RefCell<Session>,
     read_only: bool,
+    stdin: RefCell<Box<dyn StdinReader>>,
 }
 impl TryFrom<&Args> for Engine {
     type Error = EngineError;
@@ -23,11 +25,13 @@ impl TryFrom<&Args> for Engine {
             .clone()
             .or_else(|| current_dir().ok())
             .ok_or(EngineError::NoHomeDir)?;
+        let stdin = RefCell::new(create_stdin_reader(args.command.is_some()));
         Ok(Self {
             home: home.clone(),
             first_line_as_name: !args.first_line_as_data,
             session: RefCell::new(Session::default()),
             read_only: !args.writer_mode,
+            stdin,
         })
     }
 }
@@ -88,6 +92,21 @@ impl Engine {
     }
 
     pub(crate) fn file_name(&self, name: &ObjectName) -> Result<FoundFile, CvsSqlError> {
+        if name.0.len() == 1 {
+            if let Some(name) = name.0.first() {
+                if name.to_string() == "$" {
+                    let path = self.stdin.borrow_mut().path()?;
+                    return Ok(FoundFile {
+                        is_temp: false,
+                        path,
+                        result_name: "$".into(),
+                        exists: true,
+                        original_path: None,
+                        read_only: true,
+                    });
+                }
+            }
+        }
         let file_name = &name.0;
         let mut file_names = file_name.iter().peekable();
         let mut path = self.home.to_path_buf();

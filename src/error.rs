@@ -71,4 +71,6 @@ pub enum CvsSqlError {
     FileRemovedUnexpectedly(String),
     #[error("Could not create output: `{0}`.")]
     OutputCreationError(String),
+    #[error("Can not use stdin as a table in interactive mode.")]
+    StdinUnusable,
 }
