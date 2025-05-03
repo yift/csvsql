@@ -217,8 +217,8 @@ impl BinaryFunction for TakeAway {
         true
     }
 }
-struct Modulu {}
-impl BinaryFunction for Modulu {
+struct Modulo {}
+impl BinaryFunction for Modulo {
     fn calculate<'a>(
         &'a self,
         left: SmartReference<Value>,
@@ -1007,7 +1007,7 @@ impl SingleConvert for Expr {
                     BinaryOperator::Multiply => Box::new(Times {}),
                     BinaryOperator::Divide => Box::new(Divide {}),
                     BinaryOperator::Minus => Box::new(TakeAway {}),
-                    BinaryOperator::Modulo => Box::new(Modulu {}),
+                    BinaryOperator::Modulo => Box::new(Modulo {}),
                     BinaryOperator::StringConcat => Box::new(ConcatOperator {}),
                     BinaryOperator::Lt => Box::new(LessThen {}),
                     BinaryOperator::Gt => Box::new(GreaterThen {}),
@@ -1283,7 +1283,7 @@ impl Position {
 }
 
 struct Case {
-    leafs: Vec<(Box<dyn Projection>, Box<dyn Projection>)>,
+    leavs: Vec<(Box<dyn Projection>, Box<dyn Projection>)>,
     default: Option<Box<dyn Projection>>,
     name: String,
 }
@@ -1300,13 +1300,13 @@ fn new_case(
     if conditions.is_empty() {
         return Err(CvsSqlError::Unsupported("CASE without conditions".into()));
     }
-    let mut leafs = Vec::new();
+    let mut leavs = Vec::new();
     let mut name = "CASE ".to_string();
     for condition in conditions.iter() {
         let result = condition.result.convert_single(metadata, engine)?;
         let condition = condition.condition.convert_single(metadata, engine)?;
         name = format!("{} WHEN {} THEN {} ", name, condition.name(), result.name());
-        leafs.push((condition, result));
+        leavs.push((condition, result));
     }
     let default = else_result
         .iter()
@@ -1319,14 +1319,14 @@ fn new_case(
     };
     name = format!("{} END", name);
     Ok(Box::new(Case {
-        leafs,
+        leavs,
         default,
         name,
     }))
 }
 impl Projection for Case {
     fn get<'a>(&'a self, row: &'a GroupRow) -> SmartReference<'a, Value> {
-        for (condition, result) in &self.leafs {
+        for (condition, result) in &self.leavs {
             if condition.get(row).deref() == &Value::Bool(true) {
                 return result.get(row);
             }

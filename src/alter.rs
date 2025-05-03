@@ -33,18 +33,18 @@ pub(crate) fn alter(
     }
     let table_file = engine.file_name(name)?;
     let file_name = engine.get_file_name(&table_file);
-    let currenct_data = read_file(engine, name);
-    let mut currenct_data = match currenct_data {
+    let current_data = read_file(engine, name);
+    let mut current_data = match current_data {
         Ok(data) => data,
         Err(CvsSqlError::TableNotExists(_)) => {
             if if_exists {
                 return build_empty_results();
             } else {
-                return currenct_data;
+                return current_data;
             }
         }
         _ => {
-            return currenct_data;
+            return current_data;
         }
     };
 
@@ -56,21 +56,21 @@ pub(crate) fn alter(
                 column_def,
                 column_position,
             } => {
-                currenct_data =
-                    add_column(currenct_data, *if_not_exists, column_def, column_position)?;
+                current_data =
+                    add_column(current_data, *if_not_exists, column_def, column_position)?;
             }
             AlterTableOperation::DropColumn {
                 column_name,
                 if_exists,
                 drop_behavior,
             } => {
-                currenct_data = drop_column(currenct_data, column_name, if_exists, drop_behavior)?;
+                current_data = drop_column(current_data, column_name, if_exists, drop_behavior)?;
             }
             AlterTableOperation::RenameColumn {
                 old_column_name,
                 new_column_name,
             } => {
-                currenct_data = rename_column(currenct_data, old_column_name, new_column_name)?;
+                current_data = rename_column(current_data, old_column_name, new_column_name)?;
             }
             _ => {
                 return Err(CvsSqlError::Unsupported(format!(
@@ -87,9 +87,9 @@ pub(crate) fn alter(
         .open(table_file.path)?;
     let mut writer = new_csv_writer(file);
     if engine.first_line_as_name {
-        writer.write(&currenct_data)?
+        writer.write(&current_data)?
     } else {
-        writer.append(&currenct_data)?
+        writer.append(&current_data)?
     };
 
     let mut metadata = SimpleResultSetMetadata::new(None);
@@ -160,7 +160,7 @@ fn add_column(
         None => result_to_change.metadata.number_of_columns(),
         Some(p) => {
             return Err(CvsSqlError::Unsupported(format!(
-                "ALTER TABLE ADD COLUMN witn position - {}",
+                "ALTER TABLE ADD COLUMN with position - {}",
                 p,
             )));
         }

@@ -85,7 +85,7 @@ pub(crate) fn update_table(
             }
         };
         if to_set.insert(field.get_index(), value).is_some() {
-            return Err(CvsSqlError::MultiplieAssignment);
+            return Err(CvsSqlError::MultiplyAssignment);
         }
     }
 

@@ -9,7 +9,7 @@ pub enum OutputFormat {
     /// CSV file format
     #[default]
     Csv,
-    /// Tab seperated text
+    /// Tab separated text
     Txt,
     /// HTML files
     Html,
@@ -22,7 +22,7 @@ pub enum OutputFormat {
 #[derive(Parser, Debug, Default)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    /// SQL command to execute. If ommited the engine will read the command from the standart input. If set, the standard input can be used as table named '$'.
+    /// SQL command to execute. If omitted the engine will read the command from the standard input. If set, the standard input can be used as table named '$'.
     #[arg(short, long)]
     pub command: Option<Vec<String>>,
 

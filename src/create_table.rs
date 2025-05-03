@@ -36,10 +36,10 @@ impl Extractor for CreateTable {
         }
         if !self.constraints.is_empty() {
             return Err(CvsSqlError::Unsupported(
-                "CREATE TABLE with constaints".into(),
+                "CREATE TABLE with constraints".into(),
             ));
         }
-        if !self.constraints.is_empty() {
+        if !self.table_properties.is_empty() {
             return Err(CvsSqlError::Unsupported(
                 "CREATE TABLE with properties".into(),
             ));

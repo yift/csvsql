@@ -191,7 +191,7 @@ impl Engine {
         file.get_display_path()
             .and_then(|p| p.strip_prefix(&self.home).ok())
             .and_then(|p| p.to_str())
-            .unwrap_or("TEMPRARY_FILE")
+            .unwrap_or("TEMPORARY_FILE")
             .to_string()
     }
 

@@ -200,7 +200,7 @@ struct AggregationExample<'a> {
 trait AggregateOperator {
     fn name(&self) -> &str;
     fn support_wildcard_argument(&self) -> bool;
-    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value;
+    fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value;
     #[cfg(test)]
     fn examples<'a>(&'a self) -> Vec<AggregationExample<'a>>;
 }
@@ -227,7 +227,7 @@ impl AggregateOperator for Count {
     fn support_wildcard_argument(&self) -> bool {
         true
     }
-    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+    fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let count = data.count();
         Value::Number((count as u128).into())
     }
@@ -269,7 +269,7 @@ impl AggregateOperator for Avg {
     fn support_wildcard_argument(&self) -> bool {
         false
     }
-    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+    fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let mut total = BigDecimal::zero();
         let mut count: u128 = 0;
         for num in data.filter_map(|f| f.to_number()) {
@@ -327,7 +327,7 @@ impl AggregateOperator for Sum {
     fn support_wildcard_argument(&self) -> bool {
         false
     }
-    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+    fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let total = data
             .filter_map(|f| f.to_number())
             .fold(BigDecimal::zero(), |a, b| a + b);
@@ -376,7 +376,7 @@ impl AggregateOperator for Min {
     fn support_wildcard_argument(&self) -> bool {
         false
     }
-    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+    fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let min = data.min();
         min.unwrap_or(Value::Empty)
     }
@@ -410,7 +410,7 @@ impl AggregateOperator for Max {
     fn support_wildcard_argument(&self) -> bool {
         false
     }
-    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+    fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let min = data.max();
         min.unwrap_or(Value::Empty)
     }
@@ -443,7 +443,7 @@ impl AggregateOperator for AnyValue {
     fn support_wildcard_argument(&self) -> bool {
         false
     }
-    fn aggreagate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
+    fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let val = data.next();
         val.unwrap_or(Value::Empty)
     }
@@ -475,9 +475,9 @@ impl Projection for AggregatedFunction {
             .map(|v| v.clone());
         let value = if self.distinct {
             let mut unique = iter.unique();
-            self.operator.aggreagate(&mut unique)
+            self.operator.aggregate(&mut unique)
         } else {
-            self.operator.aggreagate(&mut iter)
+            self.operator.aggregate(&mut iter)
         };
         value.into()
     }
@@ -663,7 +663,7 @@ fn build_function(
                     }
                     _ => {
                         return Err(CvsSqlError::Unsupported(format!(
-                            "{} as argment in function {}",
+                            "{} as argument in function {}",
                             a,
                             operator.name()
                         )));
@@ -682,7 +682,7 @@ fn build_function(
     };
     if arguments.len() < operator.min_args() {
         return Err(CvsSqlError::Unsupported(format!(
-            "Function {} with {} argumnets or less",
+            "Function {} with {} arguments or less",
             operator.name(),
             arguments.len()
         )));
@@ -690,7 +690,7 @@ fn build_function(
     if let Some(max) = operator.max_args() {
         if arguments.len() > max {
             return Err(CvsSqlError::Unsupported(format!(
-                "Function {} with {} argumnets or more",
+                "Function {} with {} arguments or more",
                 operator.name(),
                 arguments.len()
             )));
@@ -1194,7 +1194,7 @@ impl Operator for Format {
                 expected_results: "23/11/2024",
             },
             FunctionExample {
-                name: "simple_timestmp",
+                name: "simple_timestamp",
                 arguments: vec!["2024-11-23 16:20:21.003", "%v %r"],
                 expected_results: "23-Nov-2024 04:20:21 PM",
             },
@@ -2374,7 +2374,7 @@ impl Operator for RegexSubstring {
                 expected_results: "",
             },
             FunctionExample {
-                name: "invalid_falgs",
+                name: "invalid_flags",
                 arguments: vec!["abc def ghi", "[A-Z]+", "1", "0", "2"],
                 expected_results: "",
             },
@@ -3173,7 +3173,7 @@ mod tests_functions {
     }
 
     #[test]
-    fn test_regex_repalce() -> Result<(), CvsSqlError> {
+    fn test_regex_replace() -> Result<(), CvsSqlError> {
         test_func(&RegexReplace {})
     }
 
@@ -3188,7 +3188,7 @@ mod tests_functions {
     }
 
     #[test]
-    fn test_reverese() -> Result<(), CvsSqlError> {
+    fn test_reverse() -> Result<(), CvsSqlError> {
         test_func(&Reverse {})
     }
     #[test]

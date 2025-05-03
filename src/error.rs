@@ -28,13 +28,13 @@ pub enum CvsSqlError {
     ColumnIndexError(#[from] ColumnIndexError),
     #[error("Can't aggregate without a group")]
     NoGroupBy,
-    #[error("Ofset must be a positive number")]
+    #[error("Offset must be a positive number")]
     NoNumericOffset,
     #[error("Limit must be a positive number")]
     NoNumericLimit,
     #[error("Table `{0}` already exists.")]
     TableAlreadyExists(String),
-    #[error("Cannot write to permenent file in read only mode.")]
+    #[error("Cannot write to permanent file in read only mode.")]
     ReadOnlyMode,
     #[error("Non temporary table `{0}` already exists.")]
     NonTemporaryTableyExists(String),
@@ -53,9 +53,9 @@ pub enum CvsSqlError {
     #[error("Table `{0}` missing structure.")]
     NoTableStructuye(String),
     #[error("Update with multiple assignment for the same columns.")]
-    MultiplieAssignment,
+    MultiplyAssignment,
     #[error("Can not delete from more than one table.")]
-    MultiplieTableDelete,
+    MultiplyTableDelete,
     #[error("Nothing to delete.")]
     NothingToDelete,
     #[error("Column `{0}` already exists.")]

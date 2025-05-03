@@ -27,3 +27,9 @@ rust_xlsxwriter = "0.86"
 
 [dev-dependencies]
 toml = "0.8"
+
+[workspace.metadata.typos]
+files.extend-exclude = [
+    "results.*.csv"
+]
+default.extend-ignore-re = ["ratatui", "constraints"]

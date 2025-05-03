@@ -15,14 +15,14 @@ use crate::results_data::{DataRow, ResultsData};
 use crate::value::Value;
 
 pub fn create_join(from: &[TableWithJoins], engine: &Engine) -> Result<ResultSet, CvsSqlError> {
-    let mut resutl = None;
+    let mut result = None;
 
     for from in from {
         let mut res = from.relation.extract(engine)?;
         for j in &from.joins {
             res = join(res, j, engine)?;
         }
-        resutl = match resutl {
+        result = match result {
             None => Some(res),
             Some(left) => {
                 let joiner = Joiner {
@@ -37,7 +37,7 @@ pub fn create_join(from: &[TableWithJoins], engine: &Engine) -> Result<ResultSet
         };
     }
 
-    resutl.ok_or_else(|| CvsSqlError::Unsupported("SELECT without FROM".to_string()))
+    result.ok_or_else(|| CvsSqlError::Unsupported("SELECT without FROM".to_string()))
 }
 fn product(left: ResultSet, right: ResultSet, joiner: Joiner) -> ResultSet {
     let mut data = Vec::new();
@@ -61,15 +61,15 @@ fn product(left: ResultSet, right: ResultSet, joiner: Joiner) -> ResultSet {
             let use_row = match joiner.constraint {
                 JoinerConstraint::All => true,
                 JoinerConstraint::On(ref filter) => {
-                    let groupd_row = GroupRow {
+                    let grouped_row = GroupRow {
                         data: row,
                         group_rows: vec![],
                     };
 
-                    let value = filter.get(&groupd_row);
+                    let value = filter.get(&grouped_row);
                     let passed = value.deref() == &Value::Bool(true);
 
-                    row = groupd_row.data;
+                    row = grouped_row.data;
                     passed
                 }
                 JoinerConstraint::Using(ref indices) => {
