@@ -1,0 +1,1 @@
+Unsupported: `ALTER TABLE with operation: ADD PRIMARY KEY (date_1)`

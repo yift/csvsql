@@ -1616,3 +1616,56 @@ fn sql_tests() -> Result<(), CvsSqlError> {
     }
     Ok(())
 }
+
+#[test]
+fn sql_errors() -> Result<(), CvsSqlError> {
+    let paths = fs::read_dir("tests/errors/")?;
+
+    for path in paths {
+        let path = path?.path();
+        let cfg_file = path.join("conf.toml");
+        let mut read_only = true;
+        if cfg_file.exists() {
+            let content = std::fs::read_to_string(cfg_file)?;
+            let cfg = content.parse::<Table>().unwrap();
+            if let Some(test_config) = cfg.get("test") {
+                if let Some(table) = test_config.as_table() {
+                    if let Some(ro) = table.get("read_only") {
+                        if let Some(ro) = ro.as_bool() {
+                            read_only = ro;
+                        }
+                    }
+                }
+            }
+        }
+        let args = Args {
+            writer_mode: !read_only,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+        println!("Testing for error: {:?}", path.file_name().unwrap());
+        let file = path.join("query.sql");
+        let sqls = fs::read_to_string(file)?;
+        for (idx, sql) in sqls.split(";").enumerate() {
+            if sql.trim().is_empty() {
+                continue;
+            }
+            let Err(err) = engine.execute_commands(&sql) else {
+                panic!("SQL: {} should have failed", sql);
+            };
+            let output = err.to_string();
+            let error_file = path.join(format!("error.{}.txt", idx));
+            if !error_file.exists() && env::var("CREATE_RESULTS").is_ok() {
+                println!("\t CREATING FILE {:?}", error_file.file_name().unwrap());
+                let mut file = File::create(error_file)?;
+                file.write(output.as_bytes())?;
+            } else {
+                println!("\t looking at {:?}", error_file.file_name().unwrap());
+                let expected_data = fs::read_to_string(error_file)?;
+                assert_eq!(output, expected_data);
+            }
+        }
+    }
+    Ok(())
+}

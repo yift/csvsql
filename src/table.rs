@@ -349,7 +349,6 @@ mod tests {
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
 
-
         table.previous_row();
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
@@ -374,12 +373,10 @@ mod tests {
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
 
-
         table.previous_column();
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
 
-
         table.previous_rows();
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
@@ -392,27 +389,21 @@ mod tests {
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
 
-
-
         table.previous_rows();
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
-
 
         table.end();
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
 
-
         table.next_row();
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
 
-
         table.next_rows();
         table.draw_on_term(&mut terminal)?;
         assert_snapshot!(terminal.backend());
-
 
         table.home();
         table.draw_on_term(&mut terminal)?;

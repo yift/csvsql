@@ -29,7 +29,9 @@ pub(crate) fn alter(
         return Err(CvsSqlError::Unsupported("ALTER TABLE with location".into()));
     }
     if on_cluster.is_some() {
-        return Err(CvsSqlError::Unsupported("ALTER TABLE with location".into()));
+        return Err(CvsSqlError::Unsupported(
+            "ALTER TABLE with ON CLUSTER".into(),
+        ));
     }
     let table_file = engine.file_name(name)?;
     let file_name = engine.get_file_name(&table_file);
@@ -79,6 +81,9 @@ pub(crate) fn alter(
                 )));
             }
         }
+    }
+    if table_file.read_only {
+        return Err(CvsSqlError::ReadOnlyMode);
     }
 
     let file = OpenOptions::new()

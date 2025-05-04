@@ -1,0 +1,1 @@
+Unsupported: `ALTER TABLE DROP COLUMN ... RESTRICT`
