@@ -18,9 +18,6 @@ use crate::{
 
 impl Extractor for Delete {
     fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
-        if !self.tables.is_empty() {
-            return Err(CvsSqlError::MultiplyTableDelete);
-        }
         if self.using.is_some() {
             return Err(CvsSqlError::Unsupported("DELETE... USING".to_string()));
         }
@@ -33,12 +30,17 @@ impl Extractor for Delete {
         if !self.order_by.is_empty() {
             return Err(CvsSqlError::Unsupported("DELETE... ORDER BY ".to_string()));
         }
+        if !self.tables.is_empty() {
+            return Err(CvsSqlError::Unsupported(
+                "DELETE... FROM TABLE ".to_string(),
+            ));
+        }
 
         let table = match &self.from {
             FromTable::WithFromKeyword(table) => table,
             FromTable::WithoutKeyword(table) => table,
         };
-        if self.tables.len() > 1 {
+        if table.len() > 1 {
             return Err(CvsSqlError::MultiplyTableDelete);
         }
         let Some(table) = table.first() else {
