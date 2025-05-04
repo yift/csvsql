@@ -1,7 +1,7 @@
 use std::ops::Deref;
 
 use bigdecimal::ToPrimitive;
-use sqlparser::ast::{Expr, Offset};
+use sqlparser::ast::Expr;
 
 use crate::{
     engine::Engine,
@@ -14,14 +14,14 @@ use crate::{
 };
 
 pub(crate) fn trim(
-    limit: &Option<Expr>,
-    offset: &Option<Offset>,
+    limit: Option<&Expr>,
+    offset: Option<&Expr>,
     engine: &Engine,
     results: &mut GroupedResultSet,
 ) -> Result<(), CvsSqlError> {
     if let Some(offset) = offset {
         let metadata = Metadata::Simple(SimpleResultSetMetadata::new(None));
-        let offset = offset.value.convert_single(&metadata, engine)?;
+        let offset = offset.convert_single(&metadata, engine)?;
         let data_row = DataRow::new(vec![]);
         let temp_row = GroupRow {
             data: data_row,

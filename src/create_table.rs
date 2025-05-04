@@ -83,7 +83,7 @@ impl Extractor for CreateTable {
         }
         if self.on_cluster.is_some() {
             return Err(CvsSqlError::Unsupported(
-                "CREATE TABLE with on clustert".into(),
+                "CREATE TABLE with on cluster".into(),
             ));
         }
         if self.primary_key.is_some() {
@@ -185,9 +185,6 @@ impl Extractor for CreateTable {
             return Err(CvsSqlError::Unsupported(
                 "CREATE TABLE with storage_serialization_policy".into(),
             ));
-        }
-        if self.or_replace {
-            return Err(CvsSqlError::Unsupported("CREATE OR REPLACE TABLE".into()));
         }
 
         let file = if self.temporary {

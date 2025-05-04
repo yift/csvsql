@@ -1,5 +1,5 @@
 use sqlparser::ast::{
-    Expr, GroupByExpr, Offset, OrderBy, Query, Select, SetExpr, Statement, TableFactor,
+    Expr, GroupByExpr, LimitClause, OrderBy, Query, Select, SetExpr, Statement, TableFactor,
 };
 
 use crate::alter::alter;
@@ -86,14 +86,6 @@ impl Extractor for Statement {
                 chain: _,
                 savepoint,
             } => rollback_transaction(engine, savepoint),
-            /*
-               engine: &Engine,
-               name: &ObjectName,
-               if_exists: bool,
-               operations: &[AlterTableOperation],
-               location: Option<HiveSetLocation>,
-               on_cluster: Option<Ident>,
-            */
             _ => Err(CvsSqlError::Unsupported(self.to_string())),
         }
     }
@@ -110,9 +102,22 @@ impl Extractor for Query {
         if self.with.is_some() {
             return Err(CvsSqlError::Unsupported("SELECT ... WITH".to_string()));
         }
-        if !self.limit_by.is_empty() {
-            return Err(CvsSqlError::Unsupported("SELECT ... LIMIT BY".to_string()));
-        }
+        let (limit, offset) = match &self.limit_clause {
+            None => (None, None),
+            Some(LimitClause::OffsetCommaLimit { offset, limit }) => (Some(offset), Some(limit)),
+            Some(LimitClause::LimitOffset {
+                limit,
+                offset,
+                limit_by,
+            }) => {
+                if !limit_by.is_empty() {
+                    return Err(CvsSqlError::Unsupported("SELECT ... LIMIT BY".to_string()));
+                }
+                let offset = offset.as_ref().map(|o| &o.value);
+                let limit = limit.as_ref();
+                (limit, offset)
+            }
+        };
         if !self.locks.is_empty() {
             return Err(CvsSqlError::Unsupported(
                 "SELECT ... FOR UPDATE/SHARE".to_string(),
@@ -126,19 +131,15 @@ impl Extractor for Query {
         }
 
         match &*self.body {
-            SetExpr::Select(select) => extract(
-                select,
-                &self.order_by,
-                &self.limit,
-                &self.offset,
-                engine,
-                false,
-            ),
+            SetExpr::Select(select) => {
+                extract(select, &self.order_by, limit, offset, engine, false)
+            }
             SetExpr::Query(_) => Err(CvsSqlError::Unsupported("SELECT (SELECT ...)".to_string())),
             SetExpr::Values(values) => values.extract(engine),
             SetExpr::Insert(_) => Err(CvsSqlError::Unsupported("SELECT ... INSERT".to_string())),
             SetExpr::Table(_) => Err(CvsSqlError::Unsupported("SELECT ... TABLE".to_string())),
             SetExpr::Update(_) => Err(CvsSqlError::Unsupported("SELECT ... UPDATE".to_string())),
+            SetExpr::Delete(_) => Err(CvsSqlError::Unsupported("SELECT ... DELETE".to_string())),
             SetExpr::SetOperation {
                 op: _,
                 set_quantifier: _,
@@ -150,11 +151,16 @@ impl Extractor for Query {
         }
     }
 }
+impl Extractor for Select {
+    fn extract(&self, engine: &Engine) -> Result<ResultSet, CvsSqlError> {
+        extract(self, &None, None, None, engine, false)
+    }
+}
 fn extract(
     select: &Select,
     order: &Option<OrderBy>,
-    limit: &Option<Expr>,
-    offset: &Option<Offset>,
+    limit: Option<&Expr>,
+    offset: Option<&Expr>,
     engine: &Engine,
     force_group: bool,
 ) -> Result<ResultSet, CvsSqlError> {
