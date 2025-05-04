@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 mod alter;
 pub mod args;
 mod cast;

@@ -1,0 +1,50 @@
+#!/bin/bash
+
+clear
+
+echo 'Building...'
+
+echo '  Format...'
+cargo fmt > /tmp/out.txt 2>&1
+if [ $? -ne 0 ]; then
+    less /tmp/out.txt
+    exit -1
+fi
+
+echo '  Check...'
+cargo check --tests --all-features > /tmp/out.txt 2>&1
+if [ $? -ne 0 ]; then
+    less /tmp/out.txt
+    exit -1
+fi
+
+
+echo '  Build...'
+cargo build --all-targets --all-features > /tmp/out.txt 2>&1
+if [ $? -ne 0 ]; then
+    less /tmp/out.txt
+    exit -1
+fi
+
+echo '  Typos...'
+typos > /tmp/out.txt 2>&1
+if [ $? -ne 0 ]; then
+    less /tmp/out.txt
+    exit -1
+fi
+
+echo '  Clippy...'
+cargo clippy > /tmp/out.txt 2>&1
+if [ $? -ne 0 ]; then
+    less /tmp/out.txt
+    exit -1
+fi
+
+echo '  Test...'
+RUST_BACKTRACE=1 cargo test > /tmp/out.txt 2>&1
+if [ $? -ne 0 ]; then
+    less /tmp/out.txt
+    exit -1
+fi
+
+echo 'OK'

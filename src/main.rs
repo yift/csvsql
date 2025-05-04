@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use clap::Parser;
 use csvsql::{
     args::Args, console::work_on_console, engine::Engine, error::CvsSqlError,

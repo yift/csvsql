@@ -1,5 +1,7 @@
+use std::io;
+
 use crossterm::event::{self, Event};
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{Frame, Terminal, prelude::Backend};
 
 use crate::{error::CvsSqlError, results::ResultSet};
 
@@ -20,8 +22,8 @@ const PALETTE: tailwind::Palette = tailwind::SKY;
 const INFO_TEXT: &str = "(Esc) quit | (↑) move up | (↓) move down";
 
 pub(crate) fn draw_table(results: &ResultSet) -> Result<(), CvsSqlError> {
-    let terminal = ratatui::init();
-    let result = App::new(results).run(terminal);
+    let mut terminal = ratatui::init();
+    let result = TableApp::new(results, event::read).run(&mut terminal);
     ratatui::restore();
     result
 }
@@ -56,17 +58,18 @@ impl TableColors {
     }
 }
 
-struct App {
+struct TableApp {
     state: TableState,
     headers: Vec<String>,
     constraints: Vec<Constraint>,
     data: Vec<Vec<String>>,
     scroll_state: ScrollbarState,
     colors: TableColors,
+    next_event: fn() -> io::Result<Event>,
 }
 
-impl App {
-    fn new(results: &ResultSet) -> Self {
+impl TableApp {
+    fn new(results: &ResultSet, next_event: fn() -> io::Result<Event>) -> Self {
         let mut headers = vec![];
         let mut longest_item_lens = vec![];
         for col in results.columns() {
@@ -109,6 +112,7 @@ impl App {
             colors: TableColors::new(&PALETTE),
             data,
             headers,
+            next_event,
         }
     }
     pub fn next_row(&mut self) {
@@ -196,11 +200,16 @@ impl App {
         self.state.select_previous_column();
     }
 
-    fn run(mut self, mut terminal: DefaultTerminal) -> Result<(), CvsSqlError> {
-        loop {
-            terminal.draw(|frame| self.draw(frame))?;
+    fn draw_on_term<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<(), CvsSqlError> {
+        terminal.draw(|frame| self.draw(frame))?;
+        Ok(())
+    }
 
-            if let Event::Key(key) = event::read()? {
+    fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<(), CvsSqlError> {
+        loop {
+            self.draw_on_term(terminal)?;
+
+            if let Event::Key(key) = (self.next_event)()? {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
                         KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
@@ -301,5 +310,114 @@ impl App {
             )
             .centered();
         frame.render_widget(info_footer, area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    use insta::assert_snapshot;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    use crate::{args::Args, engine::Engine, error::CvsSqlError};
+
+    use super::TableApp;
+
+    fn send_q() -> std::io::Result<Event> {
+        let event = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::empty());
+        Ok(Event::Key(event))
+    }
+    #[test]
+    fn test_draw_table() -> Result<(), CvsSqlError> {
+        let args = Args::default();
+        let engine = Engine::try_from(&args)?;
+
+        let results = engine.execute_commands("SELECT * FROM tests.data.sales")?;
+        let results = &results.get(0).unwrap().results;
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+
+        let mut table = TableApp::new(&results, send_q);
+        table.run(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        table.next_row();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        table.next_row();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+
+        table.previous_row();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        table.previous_row();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        table.previous_row();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        table.previous_column();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        table.next_column();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        table.next_column();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+
+        table.previous_column();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+
+        table.previous_rows();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        table.next_rows();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        table.next_rows();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+
+
+        table.previous_rows();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+
+        table.end();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+
+        table.next_row();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+
+        table.next_rows();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+
+        table.home();
+        table.draw_on_term(&mut terminal)?;
+        assert_snapshot!(terminal.backend());
+
+        Ok(())
     }
 }
