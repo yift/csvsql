@@ -20,7 +20,7 @@ fn main() -> Result<(), CvsSqlError> {
             }
         }
     } else {
-        work_on_console(&engine, args.no_console, outputer)?;
+        work_on_console(&engine, args.no_console, outputer.as_mut())?;
     };
 
     Ok(())

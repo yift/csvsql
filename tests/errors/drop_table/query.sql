@@ -16,3 +16,7 @@ DROP TABLE no_such_table RESTRICT;
 DROP TABLE no_such_table PURGE;
 
 ---
+
+DROP VIEW view;
+
+---
