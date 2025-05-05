@@ -1647,7 +1647,7 @@ fn sql_errors() -> Result<(), CvsSqlError> {
         println!("Testing for error: {:?}", path.file_name().unwrap());
         let file = path.join("query.sql");
         let sqls = fs::read_to_string(file)?;
-        for (idx, sql) in sqls.split(";").enumerate() {
+        for (idx, sql) in sqls.split("---").enumerate() {
             if sql.trim().is_empty() {
                 continue;
             }

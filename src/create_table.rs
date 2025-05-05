@@ -264,3 +264,296 @@ impl Extractor for CreateTable {
         Ok(results)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use sqlparser::{
+        ast::{
+            ClusteredBy, CommentDef, Expr, Ident, OneOrManyWithParens, RowAccessPolicy, SqlOption,
+            Statement, StorageSerializationPolicy, TableEngine, TableOptionsClustered, Value,
+            ValueWithSpan,
+        },
+        parser::Parser,
+        tokenizer::Span,
+    };
+
+    use crate::{args::Args, dialect::FilesDialect};
+
+    use super::*;
+
+    fn test_unsupported(change: fn(&mut CreateTable)) -> Result<(), CvsSqlError> {
+        let args = Args {
+            writer_mode: true,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+
+        let sql = "CREATE TABLE test_one(col TEXT)";
+        let dialect = FilesDialect {};
+        let statement = Parser::parse_sql(&dialect, sql)?;
+        let Some(Statement::CreateTable(mut create)) = statement.into_iter().next() else {
+            panic!("Not a create statement");
+        };
+        change(&mut create);
+
+        let Err(err) = create.extract(&engine) else {
+            panic!("No error");
+        };
+
+        assert!(matches!(err, CvsSqlError::Unsupported(_)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn external_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.external = true;
+        })
+    }
+
+    #[test]
+    fn volatile_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.volatile = true;
+        })
+    }
+
+    #[test]
+    fn iceberg_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.iceberg = true;
+        })
+    }
+
+    #[test]
+    fn table_with_properties_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.table_properties = vec![SqlOption::Clustered(
+                TableOptionsClustered::ColumnstoreIndex,
+            )]
+        })
+    }
+
+    #[test]
+    fn table_with_option_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.with_options = vec![SqlOption::Clustered(
+                TableOptionsClustered::ColumnstoreIndex,
+            )]
+        })
+    }
+
+    #[test]
+    fn table_option_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.options = Some(vec![SqlOption::Ident(Ident::new("test"))]);
+        })
+    }
+
+    #[test]
+    fn table_with_file_format_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| create.file_format = Some(sqlparser::ast::FileFormat::JSONFILE))
+    }
+
+    #[test]
+    fn table_location_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| create.location = Some("location".to_string()))
+    }
+
+    #[test]
+    fn table_engine_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.engine = Some(TableEngine {
+                name: "name".to_string(),
+                parameters: None,
+            })
+        })
+    }
+
+    #[test]
+    fn table_comment_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| create.comment = Some(CommentDef::WithEq("location".to_string())))
+    }
+
+    #[test]
+    fn table_auto_increment_offset_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| create.auto_increment_offset = Some(20))
+    }
+
+    #[test]
+    fn table_default_charset_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| create.default_charset = Some("utf8".to_string()))
+    }
+
+    #[test]
+    fn table_collation_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| create.collation = Some("collation".to_string()))
+    }
+
+    #[test]
+    fn table_primary_key_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            let expr = Expr::Value(ValueWithSpan {
+                value: Value::Null,
+                span: Span::empty(),
+            });
+            let expr = Box::new(expr);
+
+            create.primary_key = Some(expr)
+        })
+    }
+
+    #[test]
+    fn table_order_by_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            let expr = Expr::Value(ValueWithSpan {
+                value: Value::Null,
+                span: Span::empty(),
+            });
+
+            create.order_by = Some(OneOrManyWithParens::One(expr));
+        })
+    }
+
+    #[test]
+    fn table_partition_by_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            let expr = Expr::Value(ValueWithSpan {
+                value: Value::Null,
+                span: Span::empty(),
+            });
+            let expr = Box::new(expr);
+
+            create.partition_by = Some(expr)
+        })
+    }
+
+    #[test]
+    fn table_cluster_by_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            let ident = Ident::new("value");
+
+            create.cluster_by = Some(sqlparser::ast::WrappedCollection::NoWrapping(vec![ident]))
+        })
+    }
+
+    #[test]
+    fn table_clustered_by_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            let cluster_by = ClusteredBy {
+                columns: vec![],
+                sorted_by: None,
+                num_buckets: Value::Null,
+            };
+
+            create.clustered_by = Some(cluster_by)
+        })
+    }
+
+    #[test]
+    fn strict_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.strict = true;
+        })
+    }
+
+    #[test]
+    fn copy_grants_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.copy_grants = true;
+        })
+    }
+
+    #[test]
+    fn enable_schema_evolution_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.enable_schema_evolution = Some(true);
+        })
+    }
+
+    #[test]
+    fn change_tracking_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.change_tracking = Some(true);
+        })
+    }
+
+    #[test]
+    fn data_retention_time_in_days_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.data_retention_time_in_days = Some(2);
+        })
+    }
+
+    #[test]
+    fn max_data_extension_time_in_days_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.max_data_extension_time_in_days = Some(2);
+        })
+    }
+
+    #[test]
+    fn default_ddl_collation_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.default_ddl_collation = Some("one".into());
+        })
+    }
+
+    #[test]
+    fn with_aggregation_policy_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.with_aggregation_policy = Some(vec![].into());
+        })
+    }
+
+    #[test]
+    fn with_row_access_policy_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.with_row_access_policy = Some(RowAccessPolicy::new(vec![].into(), vec![]));
+        })
+    }
+
+    #[test]
+    fn with_tags_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.with_tags = Some(vec![]);
+        })
+    }
+
+    #[test]
+    fn base_location_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.base_location = Some("location".into());
+        })
+    }
+
+    #[test]
+    fn catalog_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.catalog = Some("location".into());
+        })
+    }
+
+    #[test]
+    fn catalog_sync_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.catalog_sync = Some("location".into());
+        })
+    }
+
+    #[test]
+    fn storage_serialization_policy_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.storage_serialization_policy = Some(StorageSerializationPolicy::Compatible);
+        })
+    }
+
+    #[test]
+    fn external_volume_table_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| {
+            create.external_volume = Some("location".into());
+        })
+    }
+}
