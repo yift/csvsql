@@ -214,3 +214,50 @@ pub enum EngineError {
     #[error("Cannot find home directory")]
     NoHomeDir,
 }
+
+#[cfg(test)]
+mod tests {
+
+    use sqlparser::ast::Ident;
+
+    use super::*;
+
+    struct FakeStdIn {}
+    impl StdinReader for FakeStdIn {
+        fn path(&mut self) -> Result<PathBuf, CvsSqlError> {
+            Ok(PathBuf::from("/stdin"))
+        }
+    }
+
+    #[test]
+    fn read_stdin_as_dollar() -> Result<(), CvsSqlError> {
+        let args = Args::default();
+        let mut engine = Engine::try_from(&args)?;
+        engine.stdin = RefCell::new(Box::new(FakeStdIn {}));
+        let name = ObjectName::from(vec![Ident::from("$")]);
+
+        let file = engine.file_name(&name)?;
+
+        assert_eq!(file.is_temp, false);
+        assert_eq!(file.path.to_str().unwrap_or_default(), "/stdin");
+        assert_eq!(file.result_name.full_name(), "$".to_string());
+        assert_eq!(file.exists, true);
+        assert_eq!(file.original_path, None);
+        assert_eq!(file.read_only, true);
+
+        Ok(())
+    }
+
+    #[test]
+    fn missing_file_name() -> Result<(), CvsSqlError> {
+        let args = Args::default();
+        let engine = Engine::try_from(&args)?;
+        let name = ObjectName::from(vec![]);
+
+        let err = engine.file_name(&name).err().unwrap();
+
+        assert!(matches!(err, CvsSqlError::MissingTableName));
+
+        Ok(())
+    }
+}

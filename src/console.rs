@@ -255,8 +255,8 @@ mod tests {
         let mut test_repl = TestRepl::new(vec![
             "SELECT * FROM \\\n tests.data.artists".into(),
             "SELECT;".into(),
-            "SELECT COUNT(*) FROM tests.data.artists".into(),
-            "SELECT COUNT(*) FROM tests.data.artists".into(),
+            "START TRANSACTION".into(),
+            "ROLLBACK".into(),
         ]);
 
         repl(&engine, &mut outputer, &mut test_repl)?;
