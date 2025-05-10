@@ -28,6 +28,8 @@ rust_xlsxwriter = "0.86"
 [dev-dependencies]
 toml = "0.8"
 insta = "1.43"
+scraper = "0.23"
+calamine = {version = "0.27", features = ["dates"]}
 
 [workspace.metadata.typos]
 files.extend-exclude = [
