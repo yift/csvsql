@@ -67,7 +67,8 @@ pub fn read_file(engine: &Engine, name: &ObjectName) -> Result<ResultSet, CvsSql
 }
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::fs::{self, File};
+    use std::io::Write;
 
     use tempfile::tempdir;
 
@@ -159,6 +160,97 @@ mod tests {
         assert_eq!(results.len(), 1);
         let results = &results.first().unwrap().results;
         assert_eq!(results.data.iter().count(), 3);
+
+        Ok(())
+    }
+
+    #[test]
+    fn read_no_headers_large_file() -> Result<(), CvsSqlError> {
+        let working_dir = tempdir()?;
+        fs::create_dir_all(&working_dir)?;
+        let table = working_dir.path().join("tab.csv");
+        let mut table = File::create(table)?;
+        for i in 0..60 {
+            write!(&mut table, "col{},", i + 1)?;
+        }
+        writeln!(&mut table, "last")?;
+
+        let args = Args {
+            first_line_as_data: true,
+            home: Some(working_dir.path().to_path_buf()),
+            ..Args::default()
+        };
+        let engine = Engine::try_from(&args)?;
+
+        let results = engine.execute_commands("SELECT * FROM tab")?;
+        assert_eq!(results.len(), 1);
+        let results = &results.first().unwrap().results;
+        assert_eq!(results.metadata.number_of_columns(), 61);
+
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(0))
+                .unwrap()
+                .short_name(),
+            "A$"
+        );
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(1))
+                .unwrap()
+                .short_name(),
+            "B$"
+        );
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(25))
+                .unwrap()
+                .short_name(),
+            "Z$"
+        );
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(26))
+                .unwrap()
+                .short_name(),
+            "AA$"
+        );
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(27))
+                .unwrap()
+                .short_name(),
+            "AB$"
+        );
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(28))
+                .unwrap()
+                .short_name(),
+            "AC$"
+        );
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(51))
+                .unwrap()
+                .short_name(),
+            "AZ$"
+        );
+        assert_eq!(
+            results
+                .metadata
+                .column_name(&Column::from_index(54))
+                .unwrap()
+                .short_name(),
+            "BC$"
+        );
 
         Ok(())
     }

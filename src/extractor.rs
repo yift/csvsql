@@ -134,20 +134,8 @@ impl Extractor for Query {
             SetExpr::Select(select) => {
                 extract(select, &self.order_by, limit, offset, engine, false)
             }
-            SetExpr::Query(_) => Err(CvsSqlError::Unsupported("SELECT (SELECT ...)".to_string())),
             SetExpr::Values(values) => values.extract(engine),
-            SetExpr::Insert(_) => Err(CvsSqlError::Unsupported("SELECT ... INSERT".to_string())),
-            SetExpr::Table(_) => Err(CvsSqlError::Unsupported("SELECT ... TABLE".to_string())),
-            SetExpr::Update(_) => Err(CvsSqlError::Unsupported("SELECT ... UPDATE".to_string())),
-            SetExpr::Delete(_) => Err(CvsSqlError::Unsupported("SELECT ... DELETE".to_string())),
-            SetExpr::SetOperation {
-                op: _,
-                set_quantifier: _,
-                left: _,
-                right: _,
-            } => Err(CvsSqlError::Unsupported(
-                "SELECT ... UNION/EXCEPT/INTERSECT".to_string(),
-            )),
+            _ => Err(CvsSqlError::Unsupported(format!("SELECT {}", self.body))),
         }
     }
 }

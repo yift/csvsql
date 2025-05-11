@@ -1,0 +1,1 @@
+Unsupported: `SELECT ... FROM must be a table or sub query`

@@ -1,0 +1,1 @@
+Unsupported: `SELECT ... DISTRIBUTE BY`
