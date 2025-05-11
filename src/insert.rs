@@ -28,7 +28,9 @@ impl Extractor for Insert {
             return Err(CvsSqlError::Unsupported("INSERT with alias".into()));
         }
         if !self.assignments.is_empty() {
-            return Err(CvsSqlError::Unsupported("INSERT with assignments".into()));
+            return Err(CvsSqlError::Unsupported(
+                "INSERT without assignments".into(),
+            ));
         }
         if self.overwrite {
             return Err(CvsSqlError::Unsupported("INSERT with overwrite".into()));
@@ -91,8 +93,6 @@ impl Extractor for Insert {
         };
         let data_to_insert = source.extract(engine)?;
         if data_to_insert.metadata.number_of_columns() != columns.len() {
-            dbg!(data_to_insert.metadata.number_of_columns());
-            dbg!(columns.len());
             return Err(CvsSqlError::InsertMismatch);
         }
         let mut rows = vec![];
@@ -130,5 +130,122 @@ impl Extractor for Insert {
         let results = ResultSet { metadata, data };
 
         Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlparser::{
+        ast::{
+            Ident, InputFormatClause, InsertAliases, MysqlInsertPriority, OnInsert,
+            SqliteOnConflict, Statement,
+        },
+        parser::Parser,
+    };
+
+    use crate::{args::Args, dialect::FilesDialect};
+
+    use super::*;
+
+    fn test_unsupported(change: fn(&mut Insert)) -> Result<(), CvsSqlError> {
+        let args = Args {
+            writer_mode: true,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+
+        let sql = "INSERT INTO test_one(col) VALUES (1)";
+        let dialect = FilesDialect {};
+        let statement = Parser::parse_sql(&dialect, sql)?;
+        let Some(Statement::Insert(mut insert)) = statement.into_iter().next() else {
+            panic!("Not an insert statement");
+        };
+        change(&mut insert);
+
+        let Err(err) = insert.extract(&engine) else {
+            panic!("No error");
+        };
+
+        assert!(matches!(err, CvsSqlError::Unsupported(_)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn insert_with_or() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.or = Some(SqliteOnConflict::Replace))
+    }
+
+    #[test]
+    fn insert_ignore() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.ignore = true)
+    }
+
+    #[test]
+    fn insert_with_alias() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.table_alias = Some(Ident::from("alias")))
+    }
+
+    #[test]
+    fn insert_with_overwrite() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.overwrite = true)
+    }
+
+    #[test]
+    fn insert_with_partitioned() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.partitioned = Some(vec![]))
+    }
+
+    #[test]
+    fn insert_with_after_columns() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.after_columns = vec![Ident::from("col")])
+    }
+
+    #[test]
+    fn insert_with_on() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.on = Some(OnInsert::DuplicateKeyUpdate(vec![])))
+    }
+
+    #[test]
+    fn insert_with_returning() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.returning = Some(vec![]))
+    }
+
+    #[test]
+    fn insert_with_replace_into() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.replace_into = true)
+    }
+
+    #[test]
+    fn insert_with_priority() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.priority = Some(MysqlInsertPriority::Delayed))
+    }
+
+    #[test]
+    fn insert_with_insert_alias() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| {
+            let alias = InsertAliases {
+                col_aliases: None,
+                row_alias: vec![Ident::from("row")].into(),
+            };
+            insert.insert_alias = Some(alias)
+        })
+    }
+
+    #[test]
+    fn insert_with_settings() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| insert.settings = Some(vec![]))
+    }
+
+    #[test]
+    fn insert_with_format() -> Result<(), CvsSqlError> {
+        test_unsupported(|insert| {
+            let clause = InputFormatClause {
+                ident: Ident::from("test"),
+                values: vec![],
+            };
+            insert.format_clause = Some(clause)
+        })
     }
 }

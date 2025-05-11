@@ -1,0 +1,1 @@
+Unsupported: `Function LEFT with 4 arguments or more`
