@@ -111,7 +111,7 @@ impl Extractor for Insert {
         let data = ResultsData::new(rows);
         let results = ResultSet { metadata, data };
         let file = OpenOptions::new().append(true).open(file.path)?;
-        let mut writer = new_csv_writer(file);
+        let mut writer = new_csv_writer(file, engine.first_line_as_name);
         writer.append(&results)?;
 
         let mut metadata = SimpleResultSetMetadata::new(None);

@@ -1597,7 +1597,7 @@ fn sql_tests() -> Result<(), CvsSqlError> {
         for (idx, results) in (engine.execute_commands(&sql)?).into_iter().enumerate() {
             let mut output = Vec::new();
             {
-                let mut writer = new_csv_writer(&mut output);
+                let mut writer = new_csv_writer(&mut output, true);
                 writer.write(&results.results)?;
             }
             let output = String::from_utf8(output).unwrap();

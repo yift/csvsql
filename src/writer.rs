@@ -12,16 +12,19 @@ pub trait Writer {
 
 struct CsvWriter<W: Write> {
     writer: csv::Writer<W>,
+    with_headers: bool,
 }
 
 impl<W: Write> Writer for CsvWriter<W> {
     fn write(&mut self, results: &ResultSet) -> Result<(), WriterError> {
-        let headers: Vec<_> = results
-            .columns()
-            .map(|column| results.metadata.column_name(&column))
-            .map(|name| name.map(|c| c.short_name()).unwrap_or_default())
-            .collect();
-        self.writer.write_record(&headers)?;
+        if self.with_headers {
+            let headers: Vec<_> = results
+                .columns()
+                .map(|column| results.metadata.column_name(&column))
+                .map(|name| name.map(|c| c.short_name()).unwrap_or_default())
+                .collect();
+            self.writer.write_record(&headers)?;
+        }
         self.append(results)
     }
     fn append(&mut self, results: &ResultSet) -> Result<(), WriterError> {
@@ -38,9 +41,10 @@ impl<W: Write> Writer for CsvWriter<W> {
     }
 }
 
-pub fn new_csv_writer<W: Write>(w: W) -> impl Writer {
+pub fn new_csv_writer<W: Write>(w: W, with_headers: bool) -> impl Writer {
     CsvWriter {
         writer: WriterBuilder::new().from_writer(w),
+        with_headers,
     }
 }
 
@@ -86,7 +90,7 @@ mod tests {
         let mut write = Vec::new();
 
         {
-            let mut writer = new_csv_writer(&mut write);
+            let mut writer = new_csv_writer(&mut write, true);
             writer.write(&mut results)?;
         }
 
@@ -96,6 +100,39 @@ mod tests {
         assert_eq!(lines[1], "0,12,24,36,48");
         assert_eq!(lines[2], "1,13,25,37,49");
         assert_eq!(lines[3], "2,14,26,38,50");
+
+        Ok(())
+    }
+    #[test]
+    fn write_writes_csv_output_no_headers() -> Result<(), WriterError> {
+        let mut rows = Vec::new();
+        let mut metadata = SimpleResultSetMetadata::new(None);
+        for r in 0..3 {
+            let mut row = Vec::new();
+            for c in 0..5 {
+                if r == 0 {
+                    metadata.add_column(format!("col {}", c).as_str());
+                }
+                row.push(Value::Number(BigDecimal::from_i32(c * 12 + r).unwrap()));
+            }
+            let row = DataRow::new(row);
+            rows.push(row);
+        }
+        let data = ResultsData::new(rows);
+        let metadata = Rc::new(metadata.build());
+        let mut results = ResultSet { metadata, data };
+        let mut write = Vec::new();
+
+        {
+            let mut writer = new_csv_writer(&mut write, false);
+            writer.write(&mut results)?;
+        }
+
+        let lines = String::from_utf8(write).unwrap();
+        let lines: Vec<_> = lines.lines().collect();
+        assert_eq!(lines[0], "0,12,24,36,48");
+        assert_eq!(lines[1], "1,13,25,37,49");
+        assert_eq!(lines[2], "2,14,26,38,50");
 
         Ok(())
     }

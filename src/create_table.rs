@@ -236,12 +236,8 @@ impl Extractor for CreateTable {
                 fs::create_dir_all(parent)?;
             }
             let writer = File::create(file.path)?;
-            let mut writer = new_csv_writer(writer);
-            if engine.first_line_as_name {
-                writer.write(&data)?;
-            } else {
-                writer.append(&data)?;
-            }
+            let mut writer = new_csv_writer(writer, engine.first_line_as_name);
+            writer.write(&data)?;
         }
 
         let mut metadata = SimpleResultSetMetadata::new(None);

@@ -90,12 +90,8 @@ pub(crate) fn alter(
         .write(true)
         .truncate(true)
         .open(table_file.path)?;
-    let mut writer = new_csv_writer(file);
-    if engine.first_line_as_name {
-        writer.write(&current_data)?
-    } else {
-        writer.append(&current_data)?
-    };
+    let mut writer = new_csv_writer(file, engine.first_line_as_name);
+    writer.write(&current_data)?;
 
     let mut metadata = SimpleResultSetMetadata::new(None);
     metadata.add_column("action");

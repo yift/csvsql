@@ -59,7 +59,7 @@ struct StdoutOutputer {}
 impl Outputer for StdoutOutputer {
     fn write(&mut self, results: &CommandExecution) -> Result<Option<String>, CvsSqlError> {
         let stdout = io::stdout().lock();
-        let mut writer = new_csv_writer(stdout);
+        let mut writer = new_csv_writer(stdout, true);
         writer.write(&results.results).ok();
         Ok(None)
     }
@@ -114,7 +114,7 @@ impl Outputer for CsvOutputer {
 
         let path = self.root.join(&file_name);
         let writer = File::create(&path)?;
-        let mut writer = new_csv_writer(writer);
+        let mut writer = new_csv_writer(writer, true);
         writer.write(&results.results)?;
 
         let file = OpenOptions::new().append(true).open(&self.all)?;
