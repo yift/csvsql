@@ -57,23 +57,18 @@ impl TryFrom<&DateTimeField> for Field {
     fn try_from(value: &DateTimeField) -> Result<Self, Self::Error> {
         match value {
             DateTimeField::Day => Ok(Field::Day),
-            DateTimeField::DayOfWeek => Ok(Field::DayOfWeek),
-            DateTimeField::DayOfYear => Ok(Field::DayOfYear),
+            DateTimeField::Dow | DateTimeField::DayOfWeek => Ok(Field::DayOfWeek),
+            DateTimeField::Doy | DateTimeField::DayOfYear => Ok(Field::DayOfYear),
             DateTimeField::Hour => Ok(Field::Hour),
             DateTimeField::Minute => Ok(Field::Minute),
             DateTimeField::Second => Ok(Field::Second),
-            DateTimeField::Dow => Ok(Field::DayOfWeek),
-            DateTimeField::Doy => Ok(Field::DayOfYear),
             DateTimeField::Epoch => Ok(Field::Epoch),
             DateTimeField::Isodow => Ok(Field::Isodow),
             DateTimeField::IsoWeek => Ok(Field::IsoWeek),
             DateTimeField::Isoyear => Ok(Field::Isoyear),
-            DateTimeField::Microsecond => Ok(Field::Microsecond),
-            DateTimeField::Microseconds => Ok(Field::Microsecond),
-            DateTimeField::Millisecond => Ok(Field::Millisecond),
-            DateTimeField::Milliseconds => Ok(Field::Millisecond),
-            DateTimeField::Nanosecond => Ok(Field::Nanosecond),
-            DateTimeField::Nanoseconds => Ok(Field::Nanosecond),
+            DateTimeField::Microseconds | DateTimeField::Microsecond => Ok(Field::Microsecond),
+            DateTimeField::Milliseconds | DateTimeField::Millisecond => Ok(Field::Millisecond),
+            DateTimeField::Nanoseconds | DateTimeField::Nanosecond => Ok(Field::Nanosecond),
             _ => Err(CvsSqlError::Unsupported(format!(
                 "EXTRACT(... FROM {})",
                 value

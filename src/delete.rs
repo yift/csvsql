@@ -126,3 +126,76 @@ impl Extractor for Delete {
         Ok(results)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use sqlparser::{
+        ast::{Statement, TableWithJoins},
+        parser::Parser,
+    };
+
+    use crate::{args::Args, dialect::FilesDialect};
+
+    use super::*;
+
+    #[test]
+    fn test_delete_without_tables() -> Result<(), CvsSqlError> {
+        let args = Args {
+            writer_mode: true,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+
+        let sql = "DELETE FROM test_one";
+        let dialect = FilesDialect {};
+        let statement = Parser::parse_sql(&dialect, sql)?;
+        let Some(Statement::Delete(mut delete)) = statement.into_iter().next() else {
+            panic!("Not a delete statement");
+        };
+
+        delete.from = FromTable::WithoutKeyword(vec![]);
+
+        let Err(err) = delete.extract(&engine) else {
+            panic!("No error");
+        };
+
+        assert!(matches!(err, CvsSqlError::NothingToDelete));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_delete_not_a_table() -> Result<(), CvsSqlError> {
+        let args = Args {
+            writer_mode: true,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+
+        let sql = "DELETE FROM test_one WHERE expr";
+        let dialect = FilesDialect {};
+        let statement = Parser::parse_sql(&dialect, sql)?;
+        let Some(Statement::Delete(mut delete)) = statement.into_iter().next() else {
+            panic!("Not a delete statement");
+        };
+        let expr = delete.selection.take().unwrap();
+
+        delete.from = FromTable::WithoutKeyword(vec![TableWithJoins {
+            joins: vec![],
+            relation: TableFactor::TableFunction {
+                expr: expr,
+                alias: None,
+            },
+        }]);
+
+        let Err(err) = delete.extract(&engine) else {
+            panic!("No error");
+        };
+
+        assert!(matches!(err, CvsSqlError::Unsupported(_)));
+
+        Ok(())
+    }
+}

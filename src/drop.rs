@@ -82,3 +82,82 @@ pub(crate) fn drop_table(
 
     Ok(results)
 }
+#[cfg(test)]
+mod tests {
+
+    use sqlparser::ast::Ident;
+
+    use crate::args::Args;
+
+    use super::*;
+
+    #[test]
+    fn drop_empty_list() -> Result<(), CvsSqlError> {
+        let args = Args {
+            writer_mode: true,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+        let object_type = ObjectType::Table;
+        let if_exists = true;
+        let names = vec![];
+        let cascade = false;
+        let restrict = false;
+        let purge = false;
+        let temporary = true;
+
+        let Err(err) = drop_table(
+            &engine,
+            &object_type,
+            &if_exists,
+            &names,
+            &cascade,
+            &restrict,
+            &purge,
+            &temporary,
+        ) else {
+            panic!("Expecting an error");
+        };
+
+        assert!(matches!(err, CvsSqlError::Unsupported(_)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn drop_empty_temp_not_a_temp() -> Result<(), CvsSqlError> {
+        let args = Args {
+            writer_mode: true,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+        let object_type = ObjectType::Table;
+        let if_exists = true;
+        let ident = vec![Ident::new("tests"), Ident::new("data"), Ident::new("sales")];
+
+        let names = vec![ident.into()];
+        let cascade = false;
+        let restrict = false;
+        let purge = false;
+        let temporary = true;
+
+        let Err(err) = drop_table(
+            &engine,
+            &object_type,
+            &if_exists,
+            &names,
+            &cascade,
+            &restrict,
+            &purge,
+            &temporary,
+        ) else {
+            panic!("Expecting an error");
+        };
+
+        assert!(matches!(err, CvsSqlError::TableNotTemporary(_)));
+
+        Ok(())
+    }
+}
