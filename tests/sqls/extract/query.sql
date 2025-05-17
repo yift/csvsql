@@ -11,3 +11,8 @@ SELECT EXTRACT(isoyear FROM dt) AS isoyear_from_date, EXTRACT(isoyear FROM ts) A
 SELECT EXTRACT(microseconds FROM dt) AS ms_from_date, EXTRACT(microseconds FROM ts) AS ms_from_timestamp FROM tests.data.dates ORDER BY amount;
 SELECT EXTRACT(milliseconds FROM dt) AS ms_from_date, EXTRACT(milliseconds FROM ts) AS ms_from_timestamp FROM tests.data.dates ORDER BY amount;
 SELECT EXTRACT(nanoseconds FROM dt) AS ns_from_date, EXTRACT(nanoseconds FROM ts) AS ns_from_timestamp FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(day FROM amount), EXTRACT(day FROM amount) AS should_be_empty_two FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(milliseconds FROM amount), EXTRACT(milliseconds FROM amount) FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(microseconds FROM amount), EXTRACT(microseconds FROM amount) FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(second FROM amount), EXTRACT(second FROM amount) FROM tests.data.dates ORDER BY amount;
+SELECT EXTRACT(epoch FROM amount), EXTRACT(epoch FROM amount) FROM tests.data.dates ORDER BY amount;

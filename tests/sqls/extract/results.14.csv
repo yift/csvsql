@@ -1,0 +1,12 @@
+EXTRACT(MILLISECONDS FROM amount),EXTRACT(MILLISECONDS FROM amount)
+,
+,
+,
+,
+,
+,
+,
+,
+,
+,
+,

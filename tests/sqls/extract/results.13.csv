@@ -1,0 +1,12 @@
+EXTRACT(DAY FROM amount),should_be_empty_two
+,
+,
+,
+,
+,
+,
+,
+,
+,
+,
+,
