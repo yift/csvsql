@@ -91,3 +91,78 @@ pub fn order_by(
     });
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use sqlparser::{
+        ast::{Interpolate, OrderByOptions, Statement, WithFill},
+        parser::Parser,
+    };
+
+    use crate::{args::Args, dialect::FilesDialect, extractor::Extractor};
+
+    use super::*;
+
+    fn test_unsupported_order_by(change: fn(&mut OrderBy)) -> Result<(), CvsSqlError> {
+        let args = Args {
+            writer_mode: true,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+
+        let sql = "SELECT * FROM tests.data.dates ORDER BY amount";
+        let dialect = FilesDialect {};
+        let statement = Parser::parse_sql(&dialect, sql)?;
+        let Some(Statement::Query(mut query)) = statement.into_iter().next() else {
+            panic!("Not a select statement");
+        };
+        let Some(order_by) = &query.order_by else {
+            panic!("No order by?");
+        };
+        let mut order_by = order_by.clone();
+        change(&mut order_by);
+
+        query.order_by = Some(order_by);
+        let Err(err) = query.extract(&engine) else {
+            panic!("No error");
+        };
+
+        assert!(matches!(err, CvsSqlError::Unsupported(_)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn interpolate_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_order_by(|order_by| {
+            order_by.interpolate = Some(Interpolate { exprs: None });
+        })
+    }
+
+    #[test]
+    fn all_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_order_by(|order_by| {
+            order_by.kind = OrderByKind::All(OrderByOptions {
+                asc: None,
+                nulls_first: None,
+            })
+        })
+    }
+
+    #[test]
+    fn with_fill_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_order_by(|order_by| {
+            let OrderByKind::Expressions(exprs) = &order_by.kind else {
+                panic!("Need expressions");
+            };
+            let mut expr = exprs.first().unwrap().clone();
+            expr.with_fill = Some(WithFill {
+                from: None,
+                to: None,
+                step: None,
+            });
+            order_by.kind = OrderByKind::Expressions(vec![expr]);
+        })
+    }
+}

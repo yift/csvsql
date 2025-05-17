@@ -158,9 +158,6 @@ fn extract(
     if select.top.is_some() {
         return Err(CvsSqlError::Unsupported("SELECT TOP".to_string()));
     }
-    if select.top_before_distinct {
-        return Err(CvsSqlError::Unsupported("SELECT ALL".to_string()));
-    }
     if select.into.is_some() {
         return Err(CvsSqlError::Unsupported("SELECT INTO".to_string()));
     }
@@ -338,5 +335,315 @@ impl Extractor for TableFactor {
                 "SELECT ... FROM must be a table or sub query".to_string(),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlparser::{
+        ast::{
+            ConnectBy, FormatClause, Ident, JsonPath, Statement, TableAlias, TableAliasColumnDef,
+            TableIndexHintType, TableIndexHints, TableIndexType, TableSample, TableSampleKind,
+            TableSampleModifier, TableVersion, ValueTableMode,
+        },
+        parser::Parser,
+    };
+
+    use crate::{args::Args, dialect::FilesDialect};
+
+    use super::*;
+
+    fn test_unsupported_extractor(change: impl Fn(&mut Query)) -> Result<(), CvsSqlError> {
+        let args = Args {
+            writer_mode: true,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+
+        let sql = "SELECT * FROM tests.data.dates LIMIT 10";
+        let dialect = FilesDialect {};
+        let statement = Parser::parse_sql(&dialect, sql)?;
+        let Some(Statement::Query(mut query)) = statement.into_iter().next() else {
+            panic!("Not a select statement");
+        };
+        change(&mut query);
+
+        let Err(err) = query.extract(&engine) else {
+            panic!("No error");
+        };
+
+        assert!(matches!(err, CvsSqlError::Unsupported(_)));
+
+        Ok(())
+    }
+
+    fn test_unsupported_select(change: impl Fn(&mut Select)) -> Result<(), CvsSqlError> {
+        test_unsupported_extractor(|query| {
+            let SetExpr::Select(ref mut select) = *query.body else {
+                panic!("No select?");
+            };
+            change(select);
+        })
+    }
+
+    fn test_unsupported_table_factor(change: impl Fn(&mut TableFactor)) -> Result<(), CvsSqlError> {
+        test_unsupported_select(|select| {
+            let Some(table_factor) = select.from.iter().next() else {
+                panic!("No table?");
+            };
+            let mut table_factor = table_factor.clone();
+            change(&mut table_factor.relation);
+            select.from = vec![table_factor];
+        })
+    }
+
+    #[test]
+    fn limit_by_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_extractor(|query| {
+            let Some(LimitClause::LimitOffset {
+                limit,
+                offset: _,
+                limit_by: _,
+            }) = &query.limit_clause
+            else {
+                panic!("No limit?")
+            };
+            let Some(limit) = limit else {
+                panic!("No limit?")
+            };
+            query.limit_clause = Some(LimitClause::LimitOffset {
+                limit: None,
+                offset: None,
+                limit_by: vec![limit.clone()],
+            });
+        })
+    }
+
+    #[test]
+    fn settings_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_extractor(|query| {
+            query.settings = Some(vec![]);
+        })
+    }
+
+    #[test]
+    fn format_clause_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_extractor(|query| {
+            query.format_clause = Some(FormatClause::Null);
+        })
+    }
+
+    #[test]
+    fn prewhere_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_select(|select| {
+            let ext = Ident::new("test");
+            select.prewhere = Some(Expr::Identifier(ext));
+        })
+    }
+
+    #[test]
+    fn value_table_mode_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_select(|select| {
+            select.value_table_mode = Some(ValueTableMode::AsStruct);
+        })
+    }
+
+    #[test]
+    fn connect_by_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_select(|select| {
+            let ext = Ident::new("test");
+            select.connect_by = Some(ConnectBy {
+                condition: Expr::Identifier(ext),
+                relationships: vec![],
+            });
+        })
+    }
+
+    #[test]
+    fn empty_from_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_select(|select| select.from = vec![])
+    }
+
+    #[test]
+    fn version_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_table_factor(|from| {
+            let ext = Expr::Identifier(Ident::new("test"));
+            match from {
+                TableFactor::Table {
+                    name: _,
+                    alias: _,
+                    args: _,
+                    with_hints: _,
+                    version,
+                    with_ordinality: _,
+                    partitions: _,
+                    json_path: _,
+                    sample: _,
+                    index_hints: _,
+                } => *version = Some(TableVersion::Function(ext)),
+                _ => {
+                    panic!("Not a table?")
+                }
+            };
+        })
+    }
+
+    #[test]
+    fn with_ordinality_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_table_factor(|from| {
+            match from {
+                TableFactor::Table {
+                    name: _,
+                    alias: _,
+                    args: _,
+                    with_hints: _,
+                    version: _,
+                    with_ordinality,
+                    partitions: _,
+                    json_path: _,
+                    sample: _,
+                    index_hints: _,
+                } => *with_ordinality = true,
+                _ => {
+                    panic!("Not a table?")
+                }
+            };
+        })
+    }
+
+    #[test]
+    fn partitions_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_table_factor(|from| {
+            match from {
+                TableFactor::Table {
+                    name: _,
+                    alias: _,
+                    args: _,
+                    with_hints: _,
+                    version: _,
+                    with_ordinality: _,
+                    partitions,
+                    json_path: _,
+                    sample: _,
+                    index_hints: _,
+                } => *partitions = vec![Ident::from("test")],
+                _ => {
+                    panic!("Not a table?")
+                }
+            };
+        })
+    }
+
+    #[test]
+    fn json_path_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_table_factor(|from| {
+            match from {
+                TableFactor::Table {
+                    name: _,
+                    alias: _,
+                    args: _,
+                    with_hints: _,
+                    version: _,
+                    with_ordinality: _,
+                    partitions: _,
+                    json_path,
+                    sample: _,
+                    index_hints: _,
+                } => *json_path = Some(JsonPath { path: vec![] }),
+                _ => {
+                    panic!("Not a table?")
+                }
+            };
+        })
+    }
+
+    #[test]
+    fn sample_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_table_factor(|from| {
+            let table_sample = TableSample {
+                modifier: TableSampleModifier::Sample,
+                name: None,
+                quantity: None,
+                seed: None,
+                bucket: None,
+                offset: None,
+            };
+            match from {
+                TableFactor::Table {
+                    name: _,
+                    alias: _,
+                    args: _,
+                    with_hints: _,
+                    version: _,
+                    with_ordinality: _,
+                    partitions: _,
+                    json_path: _,
+                    sample,
+                    index_hints: _,
+                } => *sample = Some(TableSampleKind::BeforeTableAlias(Box::new(table_sample))),
+                _ => {
+                    panic!("Not a table?")
+                }
+            };
+        })
+    }
+
+    #[test]
+    fn index_hints_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_table_factor(|from| {
+            let hint = TableIndexHints {
+                hint_type: TableIndexHintType::Use,
+                index_type: TableIndexType::Key,
+                for_clause: None,
+                index_names: vec![],
+            };
+            match from {
+                TableFactor::Table {
+                    name: _,
+                    alias: _,
+                    args: _,
+                    with_hints: _,
+                    version: _,
+                    with_ordinality: _,
+                    partitions: _,
+                    json_path: _,
+                    sample: _,
+                    index_hints,
+                } => *index_hints = vec![hint],
+                _ => {
+                    panic!("Not a table?")
+                }
+            };
+        })
+    }
+
+    #[test]
+    fn sub_query_column_alias_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported_table_factor(|from| {
+            let defs = TableAliasColumnDef::from_name("name");
+            match from {
+                TableFactor::Table {
+                    name: _,
+                    alias,
+                    args: _,
+                    with_hints: _,
+                    version: _,
+                    with_ordinality: _,
+                    partitions: _,
+                    json_path: _,
+                    sample: _,
+                    index_hints: _,
+                } => {
+                    *alias = Some(TableAlias {
+                        name: Ident::from("name"),
+                        columns: vec![defs],
+                    });
+                }
+                _ => {
+                    panic!("Not a table?")
+                }
+            };
+        })
     }
 }

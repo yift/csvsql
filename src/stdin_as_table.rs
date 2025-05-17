@@ -42,3 +42,38 @@ impl StdinReader for UnsupportedStdinReader {
         Err(CvsSqlError::StdinUnusable)
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use std::fs;
+
+    use super::*;
+
+    #[test]
+    fn unsupported_stdin_will_return_err() {
+        let mut reader = UnsupportedStdinReader {};
+        let err = reader.path().err().unwrap();
+        assert!(matches!(err, CvsSqlError::StdinUnusable));
+    }
+
+    #[test]
+    fn supported_stdin_will_return_same_data_always() {
+        let data = "test data".as_bytes();
+        let mut reader = StdinAsTableState::Unread(data);
+
+        let path = reader.path().unwrap();
+
+        let content = fs::read_to_string(path).unwrap();
+
+        assert_eq!(content, "test data");
+        assert!(matches!(reader, StdinAsTableState::Read(_)));
+
+        let path = reader.path().unwrap();
+
+        let content = fs::read_to_string(path).unwrap();
+
+        assert_eq!(content, "test data");
+        assert!(matches!(reader, StdinAsTableState::Read(_)));
+    }
+}
