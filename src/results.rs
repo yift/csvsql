@@ -47,11 +47,10 @@ impl Name {
         self.elements.join(".")
     }
     pub fn short_name(&self) -> &str {
-        let name = match self.elements.last() {
+        match self.elements.last() {
             None => "",
             Some(name) => name,
-        };
-        name
+        }
     }
     pub fn available_names(&self) -> Vec<Self> {
         let short_name = self.short_name();

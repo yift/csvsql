@@ -145,13 +145,7 @@ impl TableApp {
 
     pub fn previous_rows(&mut self) {
         let i = match self.state.selected() {
-            Some(i) => {
-                if i > 20 {
-                    i - 20
-                } else {
-                    0
-                }
-            }
+            Some(i) => i.saturating_sub(20),
             None => 0,
         };
         self.state.select(Some(i));

@@ -46,3 +46,8 @@ SELECT *
 FROM tests.data.artists AS artist
 FULL JOIN tests.data.albums AS album
 ON artist.artist_id = album.artist_id;
+
+SELECT *
+FROM tests.data.artists AS artist
+FULL JOIN tests.data.albums AS album
+;
