@@ -701,60 +701,29 @@ fn test_select_all() -> Result<(), CvsSqlError> {
     let results = &results.first().unwrap().results;
     assert_eq!(results.metadata.number_of_columns(), 7);
 
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(1))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(1)),
         "company"
     );
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(2))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(2)),
         "name"
     );
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(3))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(3)),
         "country"
     );
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(4))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(4)),
         "email"
     );
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(5))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(5)),
         "active"
     );
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(6))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(6)),
         "last modified"
     );
 
@@ -785,36 +754,17 @@ fn test_select_fields() -> Result<(), CvsSqlError> {
     let results = &results.iter_mut().next().unwrap().results;
     assert_eq!(results.metadata.number_of_columns(), 4);
 
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(1))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(1)),
         "name"
     );
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(2))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(2)),
         "active"
     );
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(3))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(3)),
         "email"
     );
 
@@ -853,20 +803,9 @@ fn test_cartesian_product() -> Result<(), CvsSqlError> {
     let results = &results.iter_mut().next().unwrap().results;
     assert_eq!(results.metadata.number_of_columns(), 2);
 
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(1))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(1)),
         "name"
     );
 
@@ -905,20 +844,9 @@ fn test_select_with_plus() -> Result<(), CvsSqlError> {
 
     assert_eq!(results.metadata.number_of_columns(), 2);
 
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(1))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(1)),
         "total_price"
     );
 
@@ -956,28 +884,13 @@ fn test_use_literal() -> Result<(), CvsSqlError> {
 
     assert_eq!(results.metadata.number_of_columns(), 3);
 
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(1))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(1)),
         "tax percentage"
     );
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(2))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(2)),
         "100 * tax percentage"
     );
 
@@ -1312,14 +1225,7 @@ fn test_select_with_order_by() -> Result<(), CvsSqlError> {
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
 
     let mut expected_rows = Vec::new();
     for data in get_sales() {
@@ -1349,14 +1255,7 @@ fn test_select_with_order_by_desc() -> Result<(), CvsSqlError> {
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
 
     let mut expected_rows = Vec::new();
     for data in get_sales() {
@@ -1388,11 +1287,7 @@ fn test_select_with_order_by_two_rows() -> Result<(), CvsSqlError> {
     assert_eq!(results.metadata.number_of_columns(), 1);
 
     assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
+        results.metadata.column_title(&Column::from_index(0)),
         "email"
     );
 
@@ -1430,14 +1325,7 @@ fn test_select_with_order_by_nulls_last() -> Result<(), CvsSqlError> {
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
 
     let mut expected_rows = Vec::new();
     for data in get_sales() {
@@ -1479,14 +1367,7 @@ fn test_select_with_order_by_nulls_last_desc() -> Result<(), CvsSqlError> {
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
 
     let mut expected_rows = Vec::new();
     for data in get_sales() {
@@ -1528,14 +1409,7 @@ fn test_select_with_order_by_nulls_first() -> Result<(), CvsSqlError> {
 
     assert_eq!(results.metadata.number_of_columns(), 1);
 
-    assert_eq!(
-        results
-            .metadata
-            .column_name(&Column::from_index(0))
-            .unwrap()
-            .short_name(),
-        "id"
-    );
+    assert_eq!(results.metadata.column_title(&Column::from_index(0)), "id");
 
     let mut expected_rows = Vec::new();
     for data in get_sales() {

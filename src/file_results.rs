@@ -94,21 +94,10 @@ mod tests {
         assert_eq!(results.metadata.number_of_columns(), 2);
 
         assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(0))
-                .unwrap()
-                .short_name(),
+            results.metadata.column_title(&Column::from_index(0)),
             "col1"
         );
-        assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(1))
-                .unwrap()
-                .short_name(),
-            "B$"
-        );
+        assert_eq!(results.metadata.column_title(&Column::from_index(1)), "B$");
         assert_eq!(results.data.iter().count(), 2);
 
         let results = engine.execute_commands("SELECT col1, B$ FROM tab")?;
@@ -138,22 +127,8 @@ mod tests {
         let results = &results.first().unwrap().results;
         assert_eq!(results.metadata.number_of_columns(), 2);
 
-        assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(0))
-                .unwrap()
-                .short_name(),
-            "A$"
-        );
-        assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(1))
-                .unwrap()
-                .short_name(),
-            "B$"
-        );
+        assert_eq!(results.metadata.column_title(&Column::from_index(0)), "A$");
+        assert_eq!(results.metadata.column_title(&Column::from_index(1)), "B$");
         assert_eq!(results.data.iter().count(), 3);
 
         let results = engine.execute_commands("SELECT A$, B$ FROM tab")?;
@@ -187,68 +162,27 @@ mod tests {
         let results = &results.first().unwrap().results;
         assert_eq!(results.metadata.number_of_columns(), 61);
 
+        assert_eq!(results.metadata.column_title(&Column::from_index(0)), "A$");
+        assert_eq!(results.metadata.column_title(&Column::from_index(1)), "B$");
+        assert_eq!(results.metadata.column_title(&Column::from_index(25)), "Z$");
         assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(0))
-                .unwrap()
-                .short_name(),
-            "A$"
-        );
-        assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(1))
-                .unwrap()
-                .short_name(),
-            "B$"
-        );
-        assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(25))
-                .unwrap()
-                .short_name(),
-            "Z$"
-        );
-        assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(26))
-                .unwrap()
-                .short_name(),
+            results.metadata.column_title(&Column::from_index(26)),
             "AA$"
         );
         assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(27))
-                .unwrap()
-                .short_name(),
+            results.metadata.column_title(&Column::from_index(27)),
             "AB$"
         );
         assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(28))
-                .unwrap()
-                .short_name(),
+            results.metadata.column_title(&Column::from_index(28)),
             "AC$"
         );
         assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(51))
-                .unwrap()
-                .short_name(),
+            results.metadata.column_title(&Column::from_index(51)),
             "AZ$"
         );
         assert_eq!(
-            results
-                .metadata
-                .column_name(&Column::from_index(54))
-                .unwrap()
-                .short_name(),
+            results.metadata.column_title(&Column::from_index(54)),
             "BC$"
         );
 

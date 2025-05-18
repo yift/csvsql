@@ -31,6 +31,11 @@ impl Metadata {
             Metadata::Grouped { parent: _, this } => this.column_name(column),
         }
     }
+    pub fn column_title(&self, column: &Column) -> &str {
+        self.column_name(column)
+            .map(|n| n.short_name())
+            .unwrap_or_default()
+    }
     pub fn number_of_columns(&self) -> usize {
         match self {
             Metadata::Simple(data) => data.columns.len(),

@@ -167,8 +167,7 @@ impl Outputer for TxtOutputer {
         let headers: Vec<_> = results
             .results
             .columns()
-            .map(|column| results.results.metadata.column_name(&column))
-            .map(|name| name.map(|c| c.short_name()).unwrap_or_default())
+            .map(|column| results.results.metadata.column_title(&column))
             .collect();
         writer.write_record(&headers)?;
         for row in results.results.data.iter() {
@@ -264,12 +263,7 @@ impl Outputer for HtmlOutputer {
         writeln!(&mut writer, "<table style=\"width:100%\">")?;
         writeln!(&mut writer, "<tr>")?;
         for col in results.results.columns() {
-            let name = results
-                .results
-                .metadata
-                .column_name(&col)
-                .map(|t| t.short_name())
-                .unwrap_or_default();
+            let name = results.results.metadata.column_title(&col);
             writeln!(&mut writer, "<th>{}</th>", html_escape::encode_text(name))?
         }
         writeln!(&mut writer, "</tr>")?;
@@ -324,12 +318,7 @@ impl Outputer for JsonOutputer {
         for row in results.results.data.iter() {
             let mut line = Map::new();
             for col in results.results.columns() {
-                let name = results
-                    .results
-                    .metadata
-                    .column_name(&col)
-                    .map(|f| f.short_name())
-                    .unwrap_or_default();
+                let name = results.results.metadata.column_title(&col);
                 if !line.contains_key(name) {
                     let data = row.get(&col);
                     let data = match data {
@@ -418,11 +407,7 @@ impl XlsxOutputer {
         let mut widths = vec![];
 
         for col in results.columns() {
-            let name = results
-                .metadata
-                .column_name(&col)
-                .map(|f| f.short_name())
-                .unwrap_or_default();
+            let name = results.metadata.column_title(&col);
             worksheet.write_with_format(0, col.get_index() as u16, name, &bold_format)?;
             widths.push(name.len() as u32);
         }
@@ -535,11 +520,7 @@ mod tests {
         let mut reader = Reader::from_path(path)?;
         let headers = reader.headers()?;
         for col in result.columns() {
-            let expected_header = result
-                .metadata
-                .column_name(&col)
-                .map(|f| f.short_name())
-                .unwrap_or_default();
+            let expected_header = result.metadata.column_title(&col);
             let actual_header = headers.get(col.get_index()).unwrap_or_default();
             assert_eq!(actual_header, expected_header);
         }
@@ -593,11 +574,7 @@ mod tests {
         let mut reader = ReaderBuilder::new().delimiter(b'\t').from_path(&path)?;
         let headers = reader.headers()?;
         for col in result.columns() {
-            let expected_header = result
-                .metadata
-                .column_name(&col)
-                .map(|f| f.short_name())
-                .unwrap_or_default();
+            let expected_header = result.metadata.column_title(&col);
             let actual_header = headers.get(col.get_index()).unwrap_or_default();
             assert_eq!(actual_header, expected_header);
         }
@@ -673,11 +650,7 @@ mod tests {
         );
         let mut header_cells = header.child_elements();
         for col in result.columns() {
-            let name = result
-                .metadata
-                .column_name(&col)
-                .map(|f| f.short_name())
-                .unwrap_or_default();
+            let name = result.metadata.column_title(&col);
             let cell = header_cells.next().unwrap();
             assert_eq!("th", cell.value().name());
             assert_eq!(name, cell.text().next().unwrap());
@@ -805,14 +778,7 @@ mod tests {
                 for col in result.results.columns() {
                     let expected_data = expected_row.get(&col);
                     let actual_data = actual_row
-                        .get(
-                            result
-                                .results
-                                .metadata
-                                .column_name(&col)
-                                .map(|f| f.short_name())
-                                .unwrap_or_default(),
-                        )
+                        .get(result.results.metadata.column_title(&col))
                         .unwrap();
                     let expected_data = match expected_data {
                         Value::Empty => JsonValue::Null,
@@ -877,12 +843,7 @@ mod tests {
             assert_eq!(rows, results.results.data.iter().count() + 1);
             assert_eq!(cols, results.results.metadata.number_of_columns());
             for col in results.results.columns() {
-                let expected_name = results
-                    .results
-                    .metadata
-                    .column_name(&col)
-                    .map(|f| f.short_name())
-                    .unwrap_or_default();
+                let expected_name = results.results.metadata.column_title(&col);
                 let cell = sheet.get_value((0, col.get_index() as u32)).unwrap();
                 let Data::String(actual_name) = cell else {
                     panic!("Expecting string cell");

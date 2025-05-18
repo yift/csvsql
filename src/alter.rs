@@ -173,11 +173,7 @@ fn add_column(
         if i == position {
             metadata.add_column(name.short_name());
         }
-        let current_name = result_to_change
-            .metadata
-            .column_name(&col)
-            .map(|c| c.short_name())
-            .unwrap_or_default();
+        let current_name = result_to_change.metadata.column_title(&col);
         metadata.add_column(current_name);
     }
     if position == result_to_change.metadata.number_of_columns() {
@@ -226,11 +222,7 @@ fn drop_column(
 
     for col in result_to_change.columns() {
         if col.get_index() != index.get_index() {
-            let current_name = result_to_change
-                .metadata
-                .column_name(&col)
-                .map(|c| c.short_name())
-                .unwrap_or_default();
+            let current_name = result_to_change.metadata.column_title(&col);
             metadata.add_column(current_name);
         }
     }
@@ -259,11 +251,7 @@ fn rename_column(
 
     for col in result_to_change.columns() {
         if col.get_index() != index.get_index() {
-            let current_name = result_to_change
-                .metadata
-                .column_name(&col)
-                .map(|c| c.short_name())
-                .unwrap_or_default();
+            let current_name = result_to_change.metadata.column_title(&col);
             metadata.add_column(current_name);
         } else {
             metadata.add_column(&to.value);

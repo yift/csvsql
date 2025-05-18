@@ -73,12 +73,7 @@ impl TableApp {
         let mut headers = vec![];
         let mut longest_item_lens = vec![];
         for col in results.columns() {
-            let name = results
-                .metadata
-                .column_name(&col)
-                .map(|f| f.short_name())
-                .unwrap_or_default()
-                .to_string();
+            let name = results.metadata.column_title(&col).to_string();
             let width = UnicodeWidthStr::width(name.as_str());
             longest_item_lens.push(width);
             headers.push(name);

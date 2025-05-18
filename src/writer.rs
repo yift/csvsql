@@ -20,8 +20,7 @@ impl<W: Write> Writer for CsvWriter<W> {
         if self.with_headers {
             let headers: Vec<_> = results
                 .columns()
-                .map(|column| results.metadata.column_name(&column))
-                .map(|name| name.map(|c| c.short_name()).unwrap_or_default())
+                .map(|column| results.metadata.column_title(&column))
                 .collect();
             self.writer.write_record(&headers)?;
         }
