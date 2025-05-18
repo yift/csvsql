@@ -199,7 +199,9 @@ struct AggregationExample<'a> {
 }
 trait AggregateOperator {
     fn name(&self) -> &str;
-    fn support_wildcard_argument(&self) -> bool;
+    fn support_wildcard_argument(&self) -> bool {
+        false
+    }
     fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value;
     #[cfg(test)]
     fn examples<'a>(&'a self) -> Vec<AggregationExample<'a>>;
@@ -266,9 +268,6 @@ impl AggregateOperator for Avg {
         "AVG"
     }
 
-    fn support_wildcard_argument(&self) -> bool {
-        false
-    }
     fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let mut total = BigDecimal::zero();
         let mut count: u128 = 0;
@@ -324,9 +323,6 @@ impl AggregateOperator for Sum {
     fn name(&self) -> &str {
         "SUM"
     }
-    fn support_wildcard_argument(&self) -> bool {
-        false
-    }
     fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let total = data
             .filter_map(|f| f.to_number())
@@ -373,9 +369,6 @@ impl AggregateOperator for Min {
     fn name(&self) -> &str {
         "MIN"
     }
-    fn support_wildcard_argument(&self) -> bool {
-        false
-    }
     fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let min = data.min();
         min.unwrap_or(Value::Empty)
@@ -407,9 +400,6 @@ impl AggregateOperator for Max {
     fn name(&self) -> &str {
         "MAX"
     }
-    fn support_wildcard_argument(&self) -> bool {
-        false
-    }
     fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let min = data.max();
         min.unwrap_or(Value::Empty)
@@ -439,9 +429,6 @@ struct AnyValue {}
 impl AggregateOperator for AnyValue {
     fn name(&self) -> &str {
         "ANY_VALUE"
-    }
-    fn support_wildcard_argument(&self) -> bool {
-        false
     }
     fn aggregate(&self, data: &mut dyn Iterator<Item = Value>) -> Value {
         let val = data.next();
@@ -2864,8 +2851,24 @@ mod tests_functions {
     use bigdecimal::ToPrimitive;
     use chrono::{TimeDelta, Utc};
     use itertools::Itertools;
+    use sqlparser::{
+        ast::{
+            Expr, Function, FunctionArgumentList, FunctionArguments, Ident, LimitClause,
+            NullTreatment, Statement,
+        },
+        parser::Parser,
+    };
 
-    use crate::{args::Args, engine::Engine, error::CvsSqlError, results::Column, value::Value};
+    use crate::{
+        args::Args,
+        dialect::FilesDialect,
+        engine::Engine,
+        error::CvsSqlError,
+        projections::SingleConvert,
+        result_set_metadata::{Metadata, SimpleResultSetMetadata},
+        results::Column,
+        value::Value,
+    };
     use std::io::Write;
 
     use super::{
@@ -3215,5 +3218,71 @@ mod tests_functions {
     #[test]
     fn test_sqrt() -> Result<(), CvsSqlError> {
         test_func(&Sqrt {})
+    }
+
+    fn test_unsupported(change: fn(&mut Function)) -> Result<(), CvsSqlError> {
+        let args = Args {
+            writer_mode: true,
+            ..Args::default()
+        };
+
+        let engine = Engine::try_from(&args)?;
+
+        let sql = "SELECT * FROM tests.data.dates LIMIT RAND()";
+        let dialect = FilesDialect {};
+        let statement = Parser::parse_sql(&dialect, sql)?;
+        let Some(Statement::Query(query)) = statement.into_iter().next() else {
+            panic!("Not a select statement");
+        };
+        let Some(LimitClause::LimitOffset {
+            limit,
+            offset: _,
+            limit_by: _,
+        }) = &query.limit_clause
+        else {
+            panic!("No limit?")
+        };
+        let Some(limit) = limit else {
+            panic!("No limit?")
+        };
+        let Expr::Function(mut func) = limit.clone() else {
+            panic!("Not a function")
+        };
+
+        change(&mut func);
+
+        let metadata = Metadata::Simple(SimpleResultSetMetadata::new(None));
+        let Err(err) = func.convert_single(&metadata, &engine) else {
+            panic!("No error");
+        };
+
+        assert!(matches!(err, CvsSqlError::Unsupported(_)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_null_treatment_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|f| f.null_treatment = Some(NullTreatment::IgnoreNulls))
+    }
+
+    #[test]
+    fn test_filter_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|f| {
+            let ext = Box::new(Expr::Identifier(Ident::new("test")));
+
+            f.filter = Some(ext);
+        })
+    }
+
+    #[test]
+    fn test_parameters_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|f| {
+            f.parameters = FunctionArguments::List(FunctionArgumentList {
+                duplicate_treatment: None,
+                args: vec![],
+                clauses: vec![],
+            });
+        })
     }
 }

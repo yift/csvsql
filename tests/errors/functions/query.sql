@@ -25,3 +25,7 @@ FROM tests.data.sales;
 ---
 SELECT LTRIM(DISTINCT 'test') FROM tests.data.sales;
 ---
+SELECT COUNT() FROM tests.data.sales;
+---
+SELECT MAX(*) FROM tests.data.sales;
+---
