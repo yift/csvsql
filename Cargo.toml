@@ -1,7 +1,15 @@
 [package]
 name = "csvsql"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
+license = "MIT"
+description = "SQL like engine that works on CSV file."
+homepage = "https://github.com/yift/csvsql"
+repository = "https://github.com/yift/csvsql"
+documentation = "https://github.com/yift/csvsql/blob/main/README.md"
+readme = "README.md"
+exclude = ["/.github/*", "/.gitignore"]
+keywords = ["csv", "sql"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
