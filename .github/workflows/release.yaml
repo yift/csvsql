@@ -39,14 +39,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
-      - uses: actions-rs/toolchain@v1
+      - name: Build-musl
+        uses: gmiam/rust-musl-action@master
         with:
-          toolchain: stable
-          override: true
-      - name: install musl
-        run:  rustup target add x86_64-unknown-linux-musl
-      - name: build
-        run: cargo build --release --target=x86_64-unknown-linux-musl
+          args: cargo build --target x86_64-unknown-linux-musl --release
       - uses: actions/upload-artifact@v4
         with:
           name: csvsql-x86_64-unknown-linux-musl
