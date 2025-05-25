@@ -1,8 +1,9 @@
 name: Release
 
-on:
+on:  
   push:
-    branches: [ "main" ]
+    tags:
+      - '*'
 
 env:
   CARGO_TERM_COLOR: always
@@ -30,10 +31,15 @@ jobs:
           override: true
       - name: build
         run: cargo build --release
+      - name: zip
+        uses: vimtor/action-zip@v1.2
+        with:
+          files: ./target/release/csvsql${{ matrix.suffix }}
+          dest: ./target/zip/${{ matrix.target }}.zip
       - uses: actions/upload-artifact@v4
         with:
           name: csvsql-${{ matrix.target }}
-          path: ./target/release/csvsql${{ matrix.suffix }}
+          path: ./target/zip/${{ matrix.target }}.zip
           retention-days: 1
   build-musl-and-docker:
     runs-on: ubuntu-latest
@@ -43,11 +49,6 @@ jobs:
         uses: gmiam/rust-musl-action@master
         with:
           args: cargo build --target x86_64-unknown-linux-musl --release
-      - uses: actions/upload-artifact@v4
-        with:
-          name: csvsql-x86_64-unknown-linux-musl
-          path: ./target/x86_64-unknown-linux-musl/release/csvsql
-          retention-days: 1
       - name: Copy binary
         run: |
           rm -rf ./docker/target
@@ -64,3 +65,31 @@ jobs:
           context: docker
           push: true
           tags: yiftach/csvsql:latest,yiftach/csvsql:0.1
+      - name: zip
+        uses: vimtor/action-zip@v1.2
+        with:
+          files: ./docker/target/csvsql
+          dest: ./docker/target/zip/x86_64-unknown-linux-musl.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: csvsql-x86_64-unknown-linux-musl
+          path: ./docker/target/zip/x86_64-unknown-linux-musl.zip
+          retention-days: 1
+  create-release:
+    name: Create Release
+    needs: [build, build-musl-and-docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "artifacts/**"
+          allowUpdates: true,
+          makeLatest: true,
+
+
+        

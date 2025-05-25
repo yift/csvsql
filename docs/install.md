@@ -30,9 +30,4 @@ docker run -it --rm -v $(pwd):/data yiftach/csvsql -m /data
 
 
 ## From binary
-Some operating system binaries are available in:
-
-* [Linux GNU](https://todo...)
-* [Windows](https://todo...)
-* [Linux musl](https://todo...)
-* [Mac OS](https://todo...)
+Some operating system binaries are available in the [latest release](https://github.com/yift/csvsql/releases/latest)
