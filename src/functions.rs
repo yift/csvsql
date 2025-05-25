@@ -515,7 +515,11 @@ mod test_aggregations {
         println!("testing: {} with {}", operator.name(), example.name);
         let dir = format!("./target/function_tests/{}", operator.name().to_lowercase());
         let file = format!("{}/{}.csv", dir, example.name);
-        let mut writer = OpenOptions::new().write(true).create(true).open(&file)?;
+        let mut writer = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&file)?;
         writeln!(writer, "row")?;
         for data in &example.data {
             writeln!(writer, "{}", data)?;
@@ -2883,7 +2887,7 @@ mod tests_functions {
         println!("testing: {}", operator.name());
         fs::remove_dir_all(&dir).ok();
         for example in operator.examples() {
-            test_with_details(operator, &example.name, &example.arguments, |r| {
+            test_with_details(operator, example.name, &example.arguments, |r| {
                 let expected_results = if example.expected_results == "\"\"" {
                     Value::Str(String::new())
                 } else {
@@ -2921,8 +2925,12 @@ mod tests_functions {
         let dir = format!("./target/function_tests/{}", operator.name().to_lowercase());
         fs::create_dir_all(&dir)?;
         let file = format!("{}/{}.csv", dir, name);
-        let mut writer = OpenOptions::new().write(true).create(true).open(&file)?;
-        let header = ('a'..'z')
+        let mut writer = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&file)?;
+        let header = ('a'..='z')
             .take(arguments.len())
             .map(|c| format!("{}", c))
             .join(",");
@@ -2955,7 +2963,7 @@ mod tests_functions {
             .and_then(|d| d.results.data.iter().next())
             .map(|d| d.get(&col));
 
-        assert_eq!(true, verify_results(result));
+        assert!(verify_results(result));
 
         Ok(())
     }
@@ -2997,7 +3005,7 @@ mod tests_functions {
 
     #[test]
     fn test_current_date() -> Result<(), CvsSqlError> {
-        test_with_details(&CurrentDate {}, "current_date", &vec![], |r| match r {
+        test_with_details(&CurrentDate {}, "current_date", &[], |r| match r {
             Some(Value::Date(dt)) => {
                 let now = Utc::now().naive_utc().date();
                 let to = now.succ_opt().unwrap();
@@ -3011,7 +3019,7 @@ mod tests_functions {
 
     #[test]
     fn test_now() -> Result<(), CvsSqlError> {
-        test_with_details(&Now {}, "now", &vec![], |r| match r {
+        test_with_details(&Now {}, "now", &[], |r| match r {
             Some(Value::Timestamp(dt)) => {
                 let now = Utc::now().naive_utc();
                 let to = now.checked_add_signed(TimeDelta::seconds(10)).unwrap();
@@ -3025,7 +3033,7 @@ mod tests_functions {
 
     #[test]
     fn test_current_user() -> Result<(), CvsSqlError> {
-        test_with_details(&User {}, "user", &vec![], |r| match r {
+        test_with_details(&User {}, "user", &[], |r| match r {
             Some(Value::Str(user)) => *user == whoami::username(),
             _ => false,
         })
@@ -3103,9 +3111,10 @@ mod tests_functions {
 
     #[test]
     fn test_pi() -> Result<(), CvsSqlError> {
-        test_with_details(&Pi {}, "pi", &vec![], |r| match r {
+        test_with_details(&Pi {}, "pi", &[], |r| match r {
             Some(Value::Number(num)) => {
-                num.to_f64().unwrap() > 3.14 && num.to_f64().unwrap() < 3.15
+                num.to_f64().unwrap() > std::f64::consts::PI - 0.001
+                    && num.to_f64().unwrap() < std::f64::consts::PI + 0.001
             }
             _ => false,
         })
@@ -3113,31 +3122,31 @@ mod tests_functions {
 
     #[test]
     fn test_ln() -> Result<(), CvsSqlError> {
-        test_with_details(&Ln {}, "ln", &vec!["10"], |r| match r {
+        test_with_details(&Ln {}, "ln", &["10"], |r| match r {
             Some(Value::Number(num)) => {
                 num.to_f64().unwrap() > 2.30 && num.to_f64().unwrap() < 2.31
             }
             _ => false,
         })?;
-        test_with_details(&Ln {}, "neg_ln", &vec!["-10"], |r| r == Some(&Value::Empty))?;
-        test_with_details(&Ln {}, "nan", &vec![""], |r| r == Some(&Value::Empty))
+        test_with_details(&Ln {}, "neg_ln", &["-10"], |r| r == Some(&Value::Empty))?;
+        test_with_details(&Ln {}, "nan", &[""], |r| r == Some(&Value::Empty))
     }
 
     #[test]
     fn test_exp() -> Result<(), CvsSqlError> {
-        test_with_details(&Exp {}, "exp", &vec!["10"], |r| match r {
+        test_with_details(&Exp {}, "exp", &["10"], |r| match r {
             Some(Value::Number(num)) => {
                 num.to_f64().unwrap() > 22026.46 && num.to_f64().unwrap() < 22026.47
             }
             _ => false,
         })?;
-        test_with_details(&Exp {}, "neg_exp", &vec!["-10"], |r| match r {
+        test_with_details(&Exp {}, "neg_exp", &["-10"], |r| match r {
             Some(Value::Number(num)) => {
                 num.to_f64().unwrap() > 4.53e-5 && num.to_f64().unwrap() < 4.54e-5
             }
             _ => false,
         })?;
-        test_with_details(&Exp {}, "nan", &vec![""], |r| r == Some(&Value::Empty))
+        test_with_details(&Exp {}, "nan", &[""], |r| r == Some(&Value::Empty))
     }
 
     #[test]
@@ -3196,18 +3205,16 @@ mod tests_functions {
     }
     #[test]
     fn test_rand() -> Result<(), CvsSqlError> {
-        test_with_details(&Random {}, "no_args", &vec![], |r| match r {
+        test_with_details(&Random {}, "no_args", &[], |r| match r {
             Some(Value::Number(num)) => num.to_f64().unwrap() > 0.0 && num.to_f64().unwrap() < 1.0,
             _ => false,
         })?;
-        test_with_details(&Random {}, "one_args", &vec!["20"], |r| match r {
+        test_with_details(&Random {}, "one_args", &["20"], |r| match r {
             Some(Value::Number(num)) => num.to_usize().unwrap() < 20,
             _ => false,
         })?;
-        test_with_details(&Random {}, "nan", &vec!["t"], |r| r == Some(&Value::Empty))?;
-        test_with_details(&Random {}, "neg", &vec!["-10"], |r| {
-            r == Some(&Value::Empty)
-        })
+        test_with_details(&Random {}, "nan", &["t"], |r| r == Some(&Value::Empty))?;
+        test_with_details(&Random {}, "neg", &["-10"], |r| r == Some(&Value::Empty))
     }
 
     #[test]

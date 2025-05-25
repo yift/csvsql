@@ -737,7 +737,7 @@ fn test_select_all() -> Result<(), CvsSqlError> {
             assert_eq!(expected_value, *actual_value);
         }
     }
-    assert_eq!(results_iter.next().is_none(), true);
+    assert!(results_iter.next().is_none());
     Ok(())
 }
 
@@ -786,7 +786,7 @@ fn test_select_fields() -> Result<(), CvsSqlError> {
             }
         }
     }
-    assert_eq!(results_iter.next().is_some(), false);
+    assert!(results_iter.next().is_none());
     Ok(())
 }
 
@@ -927,7 +927,7 @@ fn test_basic_arithmetic() -> Result<(), CvsSqlError> {
     let engine = Engine::try_from(&args)?;
 
     let mut results = engine.execute_commands(
-        "SELECT 3.14 as pi, 4 * 2.2 as eight_dot_eight, 2-10 as minus_eight, 1.2/.3 as four, 20 % 6 as two, 0/0 as nothing, 2 + 3 * 5 - 7 as ten, 0 % 0 as more_nothing FROM tests.data.sales;",
+        "SELECT 7.131 as num, 4 * 2.2 as eight_dot_eight, 2-10 as minus_eight, 1.2/.3 as four, 20 % 6 as two, 0/0 as nothing, 2 + 3 * 5 - 7 as ten, 0 % 0 as more_nothing FROM tests.data.sales;",
     )?;
 
     assert_eq!(results.len(), 1);
@@ -944,7 +944,7 @@ fn test_basic_arithmetic() -> Result<(), CvsSqlError> {
             };
             data.insert(name.short_name(), value);
         }
-        assert_eq!(*data.get("pi").unwrap_or(&-200.0), 3.14);
+        assert_eq!(*data.get("num").unwrap_or(&-200.0), 7.131);
         assert_eq!(*data.get("eight_dot_eight").unwrap_or(&-200.0), 8.8);
         assert_eq!(*data.get("minus_eight").unwrap_or(&-200.0), -8.0);
         assert_eq!(*data.get("four").unwrap_or(&-200.0), 4.0);
@@ -980,7 +980,7 @@ fn test_concat() -> Result<(), CvsSqlError> {
         let expected_email = format!("{} <{}>", customer.name, customer.email);
         assert_eq!(expected_email, email.to_string());
     }
-    assert_eq!(result_iter.next().is_some(), false);
+    assert!(result_iter.next().is_none());
 
     Ok(())
 }
@@ -994,8 +994,7 @@ fn test_comparisons() -> Result<(), CvsSqlError> {
     let Some((reference_index, reference)) = sales
         .iter()
         .enumerate()
-        .filter(|s| s.1.delivered_at.is_some())
-        .next()
+        .find(|s| s.1.delivered_at.is_some())
     else {
         panic!("No delivery date?");
     };
@@ -1050,8 +1049,8 @@ fn test_comparisons() -> Result<(), CvsSqlError> {
         let neq = results.value(&"neq".into(), row);
         assert_eq!(&Value::Bool(timestamp != reference), neq);
     }
-    assert_eq!(result_iter.next().is_some(), false);
-    assert_eq!(passed_reference_index, true);
+    assert!(result_iter.next().is_none());
+    assert!(passed_reference_index);
 
     Ok(())
 }
@@ -1081,7 +1080,7 @@ fn test_boolean_arithmetic() -> Result<(), CvsSqlError> {
         for col in results.columns() {
             let name = results.metadata.column_name(&col).unwrap();
             if let Value::Bool(b) = row.get(&col) {
-                data.insert(name.short_name(), b.clone());
+                data.insert(name.short_name(), *b);
             }
         }
 
@@ -1091,7 +1090,7 @@ fn test_boolean_arithmetic() -> Result<(), CvsSqlError> {
         assert_eq!(data.get("b1 OR b2"), Some(&(b1 || b2)));
         assert_eq!(data.get("b1 XOR b2"), Some(&(b1 != b2)));
     }
-    assert_eq!(result_iter.next().is_some(), false);
+    assert!(result_iter.next().is_none());
 
     Ok(())
 }
@@ -1130,7 +1129,7 @@ fn test_is_null_operatorrs() -> Result<(), CvsSqlError> {
             assert_eq!(is_not_null, &Value::Bool(true));
         }
     }
-    assert_eq!(result_iter.next().is_some(), false);
+    assert!(result_iter.next().is_none());
 
     Ok(())
 }
@@ -1172,7 +1171,7 @@ fn test_is_true_false() -> Result<(), CvsSqlError> {
         assert_eq!(is_false, &Value::Bool(!customer.active));
         assert_eq!(is_not_false, &Value::Bool(customer.active));
     }
-    assert_eq!(result_iter.next().is_some(), false);
+    assert!(result_iter.next().is_none());
 
     Ok(())
 }
@@ -1207,7 +1206,7 @@ fn test_in_list() -> Result<(), CvsSqlError> {
         assert_eq!(in_list, &Value::Bool(expected));
         assert_eq!(not_in_list, &Value::Bool(!expected));
     }
-    assert_eq!(result_iter.next().is_some(), false);
+    assert!(result_iter.next().is_none());
 
     Ok(())
 }
@@ -1480,7 +1479,7 @@ fn sql_tests() -> Result<(), CvsSqlError> {
             if !result_file.exists() && env::var("CREATE_RESULTS").is_ok() {
                 println!("\t CREATING FILE {:?}", result_file.file_name().unwrap());
                 let mut file = File::create(result_file)?;
-                file.write(output.as_bytes())?;
+                file.write_all(output.as_bytes())?;
             } else {
                 println!("\t looking at {:?}", result_file.file_name().unwrap());
                 let expected_data = fs::read_to_string(result_file)?;
@@ -1525,7 +1524,7 @@ fn sql_errors() -> Result<(), CvsSqlError> {
             if sql.trim().is_empty() {
                 continue;
             }
-            let Err(err) = engine.execute_commands(&sql) else {
+            let Err(err) = engine.execute_commands(sql) else {
                 panic!("SQL: {} should have failed", sql);
             };
             let output = err.to_string();
@@ -1533,7 +1532,7 @@ fn sql_errors() -> Result<(), CvsSqlError> {
             if !error_file.exists() && env::var("CREATE_RESULTS").is_ok() {
                 println!("\t CREATING FILE {:?}", error_file.file_name().unwrap());
                 let mut file = File::create(error_file)?;
-                file.write(output.as_bytes())?;
+                file.write_all(output.as_bytes())?;
             } else {
                 println!("\t looking at {:?}", error_file.file_name().unwrap());
                 let expected_data = fs::read_to_string(error_file)?;

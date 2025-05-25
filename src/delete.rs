@@ -184,10 +184,7 @@ mod tests {
 
         delete.from = FromTable::WithoutKeyword(vec![TableWithJoins {
             joins: vec![],
-            relation: TableFactor::TableFunction {
-                expr: expr,
-                alias: None,
-            },
+            relation: TableFactor::TableFunction { expr, alias: None },
         }]);
 
         let Err(err) = delete.extract(&engine) else {

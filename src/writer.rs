@@ -85,12 +85,12 @@ mod tests {
         }
         let data = ResultsData::new(rows);
         let metadata = Rc::new(metadata.build());
-        let mut results = ResultSet { metadata, data };
+        let results = ResultSet { metadata, data };
         let mut write = Vec::new();
 
         {
             let mut writer = new_csv_writer(&mut write, true);
-            writer.write(&mut results)?;
+            writer.write(&results)?;
         }
 
         let lines = String::from_utf8(write).unwrap();
@@ -119,12 +119,12 @@ mod tests {
         }
         let data = ResultsData::new(rows);
         let metadata = Rc::new(metadata.build());
-        let mut results = ResultSet { metadata, data };
+        let results = ResultSet { metadata, data };
         let mut write = Vec::new();
 
         {
             let mut writer = new_csv_writer(&mut write, false);
-            writer.write(&mut results)?;
+            writer.write(&results)?;
         }
 
         let lines = String::from_utf8(write).unwrap();

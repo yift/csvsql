@@ -322,11 +322,11 @@ mod tests {
         let engine = Engine::try_from(&args)?;
 
         let results = engine.execute_commands("SELECT * FROM tests.data.sales")?;
-        let results = &results.get(0).unwrap().results;
+        let results = &results.first().unwrap().results;
 
         let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
 
-        let mut table = TableApp::new(&results, send_q);
+        let mut table = TableApp::new(results, send_q);
         table.run(&mut terminal)?;
         assert_snapshot!(terminal.backend());
 

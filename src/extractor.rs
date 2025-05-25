@@ -389,7 +389,7 @@ mod tests {
 
     fn test_unsupported_table_factor(change: impl Fn(&mut TableFactor)) -> Result<(), CvsSqlError> {
         test_unsupported_select(|select| {
-            let Some(table_factor) = select.from.iter().next() else {
+            let Some(table_factor) = select.from.first() else {
                 panic!("No table?");
             };
             let mut table_factor = table_factor.clone();

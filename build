@@ -33,15 +33,16 @@ if [ $? -ne 0 ]; then
     exit -1
 fi
 
-echo '  Clippy...'
-cargo clippy > /tmp/out.txt 2>&1
+echo '  Test...'
+INSTA_UPDATE=always CREATE_RESULTS=TRUE RUST_BACKTRACE=1 cargo test > /tmp/out.txt 2>&1
 if [ $? -ne 0 ]; then
     less /tmp/out.txt
     exit -1
 fi
 
-echo '  Test...'
-INSTA_UPDATE=always CREATE_RESULTS=TRUE RUST_BACKTRACE=1 cargo test > /tmp/out.txt 2>&1
+
+echo '  Clippy...'
+cargo clippy --all-targets --all-features -- -D warnings > /tmp/out.txt 2>&1
 if [ $? -ne 0 ]; then
     less /tmp/out.txt
     exit -1

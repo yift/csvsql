@@ -511,7 +511,7 @@ mod tests {
         let engine = Engine::try_from(&args)?;
         let results = engine.execute_commands(commands)?;
         for results in &results {
-            outputer.write(&results)?;
+            outputer.write(results)?;
         }
         Ok(results)
     }
@@ -571,7 +571,7 @@ mod tests {
     }
 
     fn verify_txt(result: &ResultSet, path: &PathBuf) -> Result<(), CvsSqlError> {
-        let mut reader = ReaderBuilder::new().delimiter(b'\t').from_path(&path)?;
+        let mut reader = ReaderBuilder::new().delimiter(b'\t').from_path(path)?;
         let headers = reader.headers()?;
         for col in result.columns() {
             let expected_header = result.metadata.column_title(&col);

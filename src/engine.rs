@@ -238,12 +238,12 @@ mod tests {
 
         let file = engine.file_name(&name)?;
 
-        assert_eq!(file.is_temp, false);
+        assert!(!file.is_temp);
         assert_eq!(file.path.to_str().unwrap_or_default(), "/stdin");
         assert_eq!(file.result_name.full_name(), "$".to_string());
-        assert_eq!(file.exists, true);
+        assert!(file.exists);
         assert_eq!(file.original_path, None);
-        assert_eq!(file.read_only, true);
+        assert!(file.read_only);
 
         Ok(())
     }
