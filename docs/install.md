@@ -24,7 +24,7 @@ cargo install csvsql
 One can use csvsql docker container. Please note that this will allow you to access only the files in the container volume. For example:
 
 ```bash
-docker run -i --rm -v $(pwd):/data yiftach/csvsql -m /data
+docker run -it --rm -v $(pwd):/data yiftach/csvsql -m /data
 ```
 (To install docker see [here](https://docs.docker.com/engine/install/)).
 
