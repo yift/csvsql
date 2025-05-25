@@ -150,7 +150,6 @@ trait BinaryFunction {
         right: SmartReference<Value>,
     ) -> SmartReference<Value>;
     fn name(&self) -> &str;
-    fn is_operator(&self) -> bool;
 }
 
 struct Plus {}
@@ -165,9 +164,6 @@ impl BinaryFunction for Plus {
     fn name(&self) -> &str {
         "+"
     }
-    fn is_operator(&self) -> bool {
-        true
-    }
 }
 struct Times {}
 impl BinaryFunction for Times {
@@ -180,9 +176,6 @@ impl BinaryFunction for Times {
     }
     fn name(&self) -> &str {
         "*"
-    }
-    fn is_operator(&self) -> bool {
-        true
     }
 }
 struct Divide {}
@@ -197,9 +190,6 @@ impl BinaryFunction for Divide {
     fn name(&self) -> &str {
         "/"
     }
-    fn is_operator(&self) -> bool {
-        true
-    }
 }
 struct TakeAway {}
 impl BinaryFunction for TakeAway {
@@ -213,9 +203,6 @@ impl BinaryFunction for TakeAway {
     fn name(&self) -> &str {
         "-"
     }
-    fn is_operator(&self) -> bool {
-        true
-    }
 }
 struct Modulo {}
 impl BinaryFunction for Modulo {
@@ -228,9 +215,6 @@ impl BinaryFunction for Modulo {
     }
     fn name(&self) -> &str {
         "%"
-    }
-    fn is_operator(&self) -> bool {
-        true
     }
 }
 
@@ -249,9 +233,6 @@ impl BinaryFunction for ConcatOperator {
     fn name(&self) -> &str {
         "||"
     }
-    fn is_operator(&self) -> bool {
-        true
-    }
 }
 
 struct LessThen {}
@@ -267,9 +248,6 @@ impl BinaryFunction for LessThen {
     }
     fn name(&self) -> &str {
         "<"
-    }
-    fn is_operator(&self) -> bool {
-        true
     }
 }
 
@@ -287,9 +265,6 @@ impl BinaryFunction for GreaterThen {
     fn name(&self) -> &str {
         ">"
     }
-    fn is_operator(&self) -> bool {
-        true
-    }
 }
 struct Equals {}
 impl BinaryFunction for Equals {
@@ -304,9 +279,6 @@ impl BinaryFunction for Equals {
     }
     fn name(&self) -> &str {
         "="
-    }
-    fn is_operator(&self) -> bool {
-        true
     }
 }
 
@@ -324,9 +296,6 @@ impl BinaryFunction for LessThenEq {
     fn name(&self) -> &str {
         "<="
     }
-    fn is_operator(&self) -> bool {
-        true
-    }
 }
 
 struct GreaterThenEq {}
@@ -343,9 +312,6 @@ impl BinaryFunction for GreaterThenEq {
     fn name(&self) -> &str {
         ">="
     }
-    fn is_operator(&self) -> bool {
-        true
-    }
 }
 
 struct NotEquals {}
@@ -361,9 +327,6 @@ impl BinaryFunction for NotEquals {
     }
     fn name(&self) -> &str {
         "<>"
-    }
-    fn is_operator(&self) -> bool {
-        true
     }
 }
 
@@ -384,9 +347,6 @@ impl BinaryFunction for AndBinaryFunction {
     fn name(&self) -> &str {
         "AND"
     }
-    fn is_operator(&self) -> bool {
-        true
-    }
 }
 
 struct OrBinaryFunction {}
@@ -405,9 +365,6 @@ impl BinaryFunction for OrBinaryFunction {
     }
     fn name(&self) -> &str {
         "OR"
-    }
-    fn is_operator(&self) -> bool {
-        true
     }
 }
 
@@ -428,9 +385,6 @@ impl BinaryFunction for XorBinaryFunction {
     }
     fn name(&self) -> &str {
         "XOR"
-    }
-    fn is_operator(&self) -> bool {
-        true
     }
 }
 
@@ -468,11 +422,7 @@ impl BinaryProjection {
         right: Box<dyn Projection>,
         operator: Box<dyn BinaryFunction>,
     ) -> Self {
-        let name = if operator.is_operator() {
-            format!("{} {} {}", left.name(), operator.name(), right.name())
-        } else {
-            format!("{}({}, {})", operator.name(), left.name(), right.name())
-        };
+        let name = format!("{} {} {}", left.name(), operator.name(), right.name());
         Self {
             left,
             right,
