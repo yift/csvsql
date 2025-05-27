@@ -1,7 +1,7 @@
 use csv::Error as CsvError;
 use rust_xlsxwriter::XlsxError;
 use sqlparser::parser::ParserError;
-use std::io::Error as IoError;
+use std::{io::Error as IoError, path::PathBuf};
 use thiserror::Error;
 
 use crate::{engine, results::ColumnIndexError, writer::WriterError};
@@ -76,4 +76,8 @@ pub enum CvsSqlError {
     StdinUnusable,
     #[error("Xlsx Error: `{0}`")]
     XlsxError(#[from] XlsxError),
+    #[error("Cannot access parent dir of: `{0}`")]
+    CannotAccessParentDir(PathBuf),
+    #[error("Path is not a directory: `{0}`")]
+    NotADir(PathBuf),
 }

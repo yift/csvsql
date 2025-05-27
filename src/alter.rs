@@ -10,9 +10,10 @@ use crate::{
     engine::Engine,
     error::CvsSqlError,
     file_results::read_file,
-    result_set_metadata::{Metadata, SimpleResultSetMetadata},
+    result_set_metadata::SimpleResultSetMetadata,
     results::{Column, ColumnIndexError, ResultSet},
-    results_data::{DataRow, ResultsData},
+    results_builder::{build_empty_results, build_simple_results},
+    results_data::ResultsData,
     value::Value,
     writer::{Writer, new_csv_writer},
 };
@@ -40,7 +41,7 @@ pub(crate) fn alter(
         Ok(data) => data,
         Err(CvsSqlError::TableNotExists(_)) => {
             if if_exists {
-                return build_empty_results();
+                return build_empty_results(&["action", "table", "file"]);
             } else {
                 return current_data;
             }
@@ -93,39 +94,11 @@ pub(crate) fn alter(
     let mut writer = new_csv_writer(file, engine.first_line_as_name);
     writer.write(&current_data)?;
 
-    let mut metadata = SimpleResultSetMetadata::new(None);
-    metadata.add_column("action");
-    metadata.add_column("table");
-    metadata.add_column("file");
-    let metadata = Metadata::Simple(metadata);
-
-    let row = vec![
-        Value::Str("ALTERED".to_string()),
-        Value::Str(table_file.result_name.full_name()),
-        Value::Str(file_name),
-    ];
-    let row = DataRow::new(row);
-    let data = vec![row];
-    let data = ResultsData::new(data);
-    let metadata = Rc::new(metadata);
-    let results = ResultSet { metadata, data };
-
-    Ok(results)
-}
-
-fn build_empty_results() -> Result<ResultSet, CvsSqlError> {
-    let mut metadata = SimpleResultSetMetadata::new(None);
-    metadata.add_column("action");
-    metadata.add_column("table");
-    metadata.add_column("file");
-    let metadata = Metadata::Simple(metadata);
-
-    let row = DataRow::new(vec![]);
-    let data = vec![row];
-    let data = ResultsData::new(data);
-    let metadata = Rc::new(metadata);
-    let results = ResultSet { metadata, data };
-    Ok(results)
+    build_simple_results(vec![
+        ("action", Value::Str("ALTERED".to_string())),
+        ("table", Value::Str(table_file.result_name.full_name())),
+        ("file", Value::Str(file_name)),
+    ])
 }
 
 fn add_column(

@@ -1,0 +1,19 @@
+USE $.$.$.$.$.$.$.$.$.$.$.$.$.$.$.$.$.$.$.$;
+
+---
+
+USE build
+
+---
+SHOW TERSE TABLES;
+---
+SHOW TABLES HISTORY;
+---
+SHOW EXTENDED TABLES;
+---
+SHOW EXTERNAL TABLES;
+---
+SHOW TERSE DATABASES;
+---
+SHOW DATABASES HISTORY;
+---

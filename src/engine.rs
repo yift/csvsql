@@ -1,8 +1,10 @@
 use crate::error::CvsSqlError;
 use crate::extractor::Extractor;
 use crate::results::Name;
+use crate::results_builder::build_simple_results;
 use crate::session::Session;
 use crate::stdin_as_table::{StdinReader, create_stdin_reader};
+use crate::value::Value;
 use crate::{args::Args, dialect::FilesDialect, results::ResultSet};
 use sqlparser::ast::ObjectName;
 use sqlparser::parser::Parser;
@@ -12,7 +14,7 @@ use thiserror::Error;
 
 pub struct Engine {
     pub(crate) first_line_as_name: bool,
-    pub(crate) home: PathBuf,
+    home: RefCell<PathBuf>,
     session: RefCell<Session>,
     read_only: bool,
     stdin: RefCell<Box<dyn StdinReader>>,
@@ -26,8 +28,9 @@ impl TryFrom<&Args> for Engine {
             .or_else(|| current_dir().ok())
             .ok_or(EngineError::NoHomeDir)?;
         let stdin = RefCell::new(create_stdin_reader(args.command.is_some()));
+        let home = RefCell::new(home.clone());
         Ok(Self {
-            home: home.clone(),
+            home,
             first_line_as_name: !args.first_line_as_data,
             session: RefCell::new(Session::default()),
             read_only: !args.writer_mode,
@@ -84,8 +87,8 @@ impl Engine {
     }
 
     pub fn prompt(&self) -> String {
-        let name = self
-            .home
+        let home = self.home.borrow();
+        let name = home
             .file_stem()
             .and_then(|f| f.to_str())
             .unwrap_or_default();
@@ -115,7 +118,7 @@ impl Engine {
         }
         let file_name = &name.0;
         let mut file_names = file_name.iter().peekable();
-        let mut path = self.home.to_path_buf();
+        let mut path = self.home.borrow().to_path_buf();
         let mut result_name = None;
         while let Some(name) = file_names.next() {
             let name = name.to_string();
@@ -161,6 +164,38 @@ impl Engine {
             .drop_temporary_table(&file.result_name)
     }
 
+    pub(crate) fn home(&self) -> PathBuf {
+        self.home.borrow().to_path_buf()
+    }
+
+    pub(crate) fn change_home(&self, name: &ObjectName) -> Result<ResultSet, CvsSqlError> {
+        if name.0.is_empty() {
+            return Err(CvsSqlError::Unsupported("USE without database name".into()));
+        }
+        let mut path = self.home.borrow().clone();
+        let mut relative = String::new();
+        for name in &name.0 {
+            if name.to_string() == "$" {
+                let Some(parent) = path.parent() else {
+                    return Err(CvsSqlError::CannotAccessParentDir(path));
+                };
+                path = parent.to_path_buf();
+                relative = format!("{}/..", relative);
+            } else {
+                path = path.join(name.to_string());
+                if !path.is_dir() {
+                    return Err(CvsSqlError::NotADir(path));
+                };
+                relative = format!("{}/{}", relative, name);
+            }
+        }
+        self.home.replace_with(|_| path);
+        build_simple_results(vec![
+            ("action", Value::Str("USE".to_string())),
+            ("path", Value::Str(relative)),
+        ])
+    }
+
     pub(crate) fn create_temp_file(&self, name: &ObjectName) -> Result<FoundFile, CvsSqlError> {
         let non_temp = self.file_name(name)?;
         if non_temp.is_temp {
@@ -189,7 +224,7 @@ impl Engine {
     }
     pub(crate) fn get_file_name(&self, file: &FoundFile) -> String {
         file.get_display_path()
-            .and_then(|p| p.strip_prefix(&self.home).ok())
+            .and_then(|p| p.strip_prefix(self.home.borrow().as_path()).ok())
             .and_then(|p| p.to_str())
             .unwrap_or("TEMPORARY_FILE")
             .to_string()

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::OpenOptions, ops::Deref, rc::Rc};
+use std::{collections::HashMap, fs::OpenOptions, ops::Deref};
 
 use bigdecimal::{BigDecimal, FromPrimitive};
 use sqlparser::ast::{
@@ -11,9 +11,9 @@ use crate::{
     extractor::Extractor,
     group_by::GroupRow,
     projections::SingleConvert,
-    result_set_metadata::SimpleResultSetMetadata,
     results::{Column, ResultSet},
-    results_data::{DataRow, ResultsData},
+    results_builder::build_simple_results,
+    results_data::ResultsData,
     value::Value,
     writer::{Writer, new_csv_writer},
 };
@@ -124,20 +124,11 @@ pub(crate) fn update_table(
     let mut writer = new_csv_writer(file, engine.first_line_as_name);
     writer.write(&results)?;
 
-    let mut metadata = SimpleResultSetMetadata::new(None);
-    metadata.add_column("action");
-    metadata.add_column("number_of_rows");
-    let metadata = metadata.build();
-
-    let row = vec![
-        Value::Str("UPDATE".to_string()),
-        Value::Number(BigDecimal::from_usize(count).unwrap()),
-    ];
-    let row = DataRow::new(row);
-    let data = vec![row];
-    let data = ResultsData::new(data);
-    let metadata = Rc::new(metadata);
-    let results = ResultSet { metadata, data };
-
-    Ok(results)
+    build_simple_results(vec![
+        ("action", Value::Str("UPDATE".to_string())),
+        (
+            "number_of_rows",
+            Value::Number(BigDecimal::from_usize(count).unwrap()),
+        ),
+    ])
 }

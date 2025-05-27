@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     fs::{self},
     path::PathBuf,
-    rc::Rc,
 };
 
 use sha256::try_digest;
@@ -12,13 +11,8 @@ use sqlparser::ast::{
 use tempfile::NamedTempFile;
 
 use crate::{
-    engine::Engine,
-    error::CvsSqlError,
-    result_set_metadata::SimpleResultSetMetadata,
-    results::ResultSet,
-    results_data::{DataRow, ResultsData},
-    session::TemporaryFiles,
-    value::Value,
+    engine::Engine, error::CvsSqlError, results::ResultSet, results_builder::build_simple_results,
+    session::TemporaryFiles, value::Value,
 };
 
 struct TransactionFile {
@@ -133,19 +127,10 @@ pub(crate) fn start_transaction(
         ));
     }
     engine.start_transaction()?;
-
-    let mut metadata = SimpleResultSetMetadata::new(None);
-    metadata.add_column("action");
-    let metadata = metadata.build();
-
-    let row = vec![Value::Str("START TRANSACTION".to_string())];
-    let row = DataRow::new(row);
-    let data = vec![row];
-    let data = ResultsData::new(data);
-    let metadata = Rc::new(metadata);
-    let results = ResultSet { metadata, data };
-
-    Ok(results)
+    build_simple_results(vec![(
+        "action",
+        Value::Str("START TRANSACTION".to_string()),
+    )])
 }
 
 pub(crate) fn commit_transaction(
@@ -159,18 +144,7 @@ pub(crate) fn commit_transaction(
     }
     engine.commit_transaction()?;
 
-    let mut metadata = SimpleResultSetMetadata::new(None);
-    metadata.add_column("action");
-    let metadata = metadata.build();
-
-    let row = vec![Value::Str("COMMIT".to_string())];
-    let row = DataRow::new(row);
-    let data = vec![row];
-    let data = ResultsData::new(data);
-    let metadata = Rc::new(metadata);
-    let results = ResultSet { metadata, data };
-
-    Ok(results)
+    build_simple_results(vec![("action", Value::Str("COMMIT".to_string()))])
 }
 
 pub(crate) fn rollback_transaction(
@@ -184,18 +158,7 @@ pub(crate) fn rollback_transaction(
     }
     engine.rollback_transaction()?;
 
-    let mut metadata = SimpleResultSetMetadata::new(None);
-    metadata.add_column("action");
-    let metadata = metadata.build();
-
-    let row = vec![Value::Str("ROLLBACK".to_string())];
-    let row = DataRow::new(row);
-    let data = vec![row];
-    let data = ResultsData::new(data);
-    let metadata = Rc::new(metadata);
-    let results = ResultSet { metadata, data };
-
-    Ok(results)
+    build_simple_results(vec![("action", Value::Str("ROLLBACK".to_string()))])
 }
 
 #[cfg(test)]

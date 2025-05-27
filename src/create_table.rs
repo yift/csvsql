@@ -8,9 +8,10 @@ use crate::engine::Engine;
 use crate::error::CvsSqlError;
 use crate::extractor::Extractor;
 use crate::file_results::read_file;
-use crate::result_set_metadata::{Metadata, SimpleResultSetMetadata};
+use crate::result_set_metadata::SimpleResultSetMetadata;
 use crate::results::ResultSet;
-use crate::results_data::{DataRow, ResultsData};
+use crate::results_builder::build_simple_results;
+use crate::results_data::ResultsData;
 use crate::value::Value;
 use crate::writer::{Writer, new_csv_writer};
 
@@ -240,24 +241,11 @@ impl Extractor for CreateTable {
             writer.write(&data)?;
         }
 
-        let mut metadata = SimpleResultSetMetadata::new(None);
-        metadata.add_column("action");
-        metadata.add_column("table");
-        metadata.add_column("file");
-        let metadata = Metadata::Simple(metadata);
-
-        let row = vec![
-            Value::Str("CREATED".to_string()),
-            Value::Str(table_name),
-            Value::Str(file_name),
-        ];
-        let row = DataRow::new(row);
-        let data = vec![row];
-        let data = ResultsData::new(data);
-        let metadata = Rc::new(metadata);
-        let results = ResultSet { metadata, data };
-
-        Ok(results)
+        build_simple_results(vec![
+            ("action", Value::Str("CREATED".to_string())),
+            ("table", Value::Str(table_name)),
+            ("file", Value::Str(file_name)),
+        ])
     }
 }
 

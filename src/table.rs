@@ -103,7 +103,7 @@ impl TableApp {
         Self {
             state: TableState::default().with_selected(0),
             constraints,
-            scroll_state: ScrollbarState::new(data.len() - 1),
+            scroll_state: ScrollbarState::new(data.len().saturating_sub(1)),
             colors: TableColors::new(&PALETTE),
             data,
             headers,

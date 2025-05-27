@@ -1,5 +1,5 @@
 use sqlparser::ast::{
-    Expr, GroupByExpr, LimitClause, OrderBy, Query, Select, SetExpr, Statement, TableFactor,
+    Expr, GroupByExpr, LimitClause, OrderBy, Query, Select, SetExpr, Statement, TableFactor, Use,
 };
 
 use crate::alter::alter;
@@ -12,6 +12,7 @@ use crate::join::create_join;
 use crate::named_results::alias_results;
 use crate::order_by_results::order_by;
 use crate::projections::make_projection;
+use crate::show::{show_databases, show_tables};
 use crate::transaction::{commit_transaction, rollback_transaction, start_transaction};
 use crate::trimmer::trim;
 use crate::update::update_table;
@@ -86,6 +87,49 @@ impl Extractor for Statement {
                 chain: _,
                 savepoint,
             } => rollback_transaction(engine, savepoint),
+            Statement::Use(name) => {
+                let Use::Object(name) = name else {
+                    return Err(CvsSqlError::Unsupported(self.to_string()));
+                };
+                engine.change_home(name)
+            }
+            Statement::ShowTables {
+                terse,
+                history,
+                extended,
+                full,
+                external,
+                show_options: _,
+            } => {
+                if *terse {
+                    return Err(CvsSqlError::Unsupported("SHOW TERSE TABLES".to_string()));
+                }
+                if *history {
+                    return Err(CvsSqlError::Unsupported("SHOW HISTORY TABLES".to_string()));
+                }
+                if *extended {
+                    return Err(CvsSqlError::Unsupported("SHOW EXTENDED TABLES".to_string()));
+                }
+                if *external {
+                    return Err(CvsSqlError::Unsupported("SHOW EXTERNAL TABLES".to_string()));
+                }
+                show_tables(engine, full)
+            }
+            Statement::ShowDatabases {
+                terse,
+                history,
+                show_options: _,
+            } => {
+                if *terse {
+                    return Err(CvsSqlError::Unsupported("SHOW TERSE DATABASES".to_string()));
+                }
+                if *history {
+                    return Err(CvsSqlError::Unsupported(
+                        "SHOW HISTORY DATABASES".to_string(),
+                    ));
+                }
+                show_databases(engine)
+            }
             _ => Err(CvsSqlError::Unsupported(self.to_string())),
         }
     }

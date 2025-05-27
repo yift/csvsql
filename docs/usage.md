@@ -13,6 +13,8 @@ Note that the dot (`.`) character is used to identify the directory (one can hav
 
 If one chose to use the predefine commands (see bellow) then using the table name `$` will try to read the `stdin` as a CSV.
 
+When changing directory (using the `USE` command), one can use the dollar `$` to go to the parent directory.
+
 ### "Transactions"
 While csvsql has no real transaction, it has a transaction like interface. If one start a transaction the engine will create a temporary directory, and will save all the changes to that directory. A `ROLLBACK` will simply delete that directory. A `COMMIT` (available only in write mode, see bellow) will copy all the files from the temporary directory to the correct location. While there is no locking mechanism, the engine will remember the hash of the content of every file it read and if the file had changes since it was read the commit will fail.
 

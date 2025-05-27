@@ -1,6 +1,7 @@
 use std::{fs::OpenOptions, rc::Rc};
 
-use crate::{result_set_metadata::Metadata, value::Value, writer::Writer};
+use crate::results_builder::build_simple_results;
+use crate::{value::Value, writer::Writer};
 use bigdecimal::BigDecimal;
 use bigdecimal::FromPrimitive;
 use sqlparser::ast::{Insert, TableObject};
@@ -114,22 +115,13 @@ impl Extractor for Insert {
         let mut writer = new_csv_writer(file, engine.first_line_as_name);
         writer.append(&results)?;
 
-        let mut metadata = SimpleResultSetMetadata::new(None);
-        metadata.add_column("action");
-        metadata.add_column("number_of_rows");
-        let metadata = Metadata::Simple(metadata);
-
-        let row = vec![
-            Value::Str("INSERT".to_string()),
-            Value::Number(BigDecimal::from_usize(len).unwrap()),
-        ];
-        let row = DataRow::new(row);
-        let data = vec![row];
-        let data = ResultsData::new(data);
-        let metadata = Rc::new(metadata);
-        let results = ResultSet { metadata, data };
-
-        Ok(results)
+        build_simple_results(vec![
+            ("action", Value::Str("INSERT".to_string())),
+            (
+                "number_of_rows",
+                Value::Number(BigDecimal::from_usize(len).unwrap()),
+            ),
+        ])
     }
 }
 

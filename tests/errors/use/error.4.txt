@@ -1,0 +1,1 @@
+Unsupported: `SHOW EXTENDED TABLES`

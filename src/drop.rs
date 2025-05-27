@@ -50,6 +50,7 @@ pub(crate) fn drop_table(
             return Err(CvsSqlError::TableNotExists(file.result_name.full_name()));
         }
     }
+
     let mut metadata = SimpleResultSetMetadata::new(None);
     metadata.add_column("action");
     metadata.add_column("table");
