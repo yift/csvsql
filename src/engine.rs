@@ -183,10 +183,10 @@ impl Engine {
                 relative = format!("{}/..", relative);
             } else {
                 path = path.join(name.to_string());
-                if !path.is_dir() {
-                    return Err(CvsSqlError::NotADir(path));
-                };
                 relative = format!("{}/{}", relative, name);
+                if !path.is_dir() {
+                    return Err(CvsSqlError::NotADir(relative));
+                };
             }
         }
         self.home.replace_with(|_| path);

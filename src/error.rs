@@ -79,5 +79,5 @@ pub enum CvsSqlError {
     #[error("Cannot access parent dir of: `{0}`")]
     CannotAccessParentDir(PathBuf),
     #[error("Path is not a directory: `{0}`")]
-    NotADir(PathBuf),
+    NotADir(String),
 }
