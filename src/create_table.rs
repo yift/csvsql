@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::rc::Rc;
 
-use sqlparser::ast::CreateTable;
+use sqlparser::ast::{CreateTable, CreateTableOptions, HiveDistributionStyle};
 
 use crate::cast::AvailableDataTypes;
 use crate::engine::Engine;
@@ -30,7 +30,7 @@ impl Extractor for CreateTable {
             return Err(CvsSqlError::Unsupported("CREATE TRANSIENT TABLE".into()));
         }
         if self.volatile {
-            return Err(CvsSqlError::Unsupported("CREATE VOLOTILE TABLE".into()));
+            return Err(CvsSqlError::Unsupported("CREATE VOLATILE TABLE".into()));
         }
         if self.iceberg {
             return Err(CvsSqlError::Unsupported("CREATE ICEBERG table".into()));
@@ -40,12 +40,7 @@ impl Extractor for CreateTable {
                 "CREATE TABLE with constraints".into(),
             ));
         }
-        if !self.table_properties.is_empty() {
-            return Err(CvsSqlError::Unsupported(
-                "CREATE TABLE with properties".into(),
-            ));
-        }
-        if !self.with_options.is_empty() {
+        if self.table_options != CreateTableOptions::None {
             return Err(CvsSqlError::Unsupported("CREATE TABLE with options".into()));
         }
         if self.file_format.is_some() {
@@ -56,26 +51,8 @@ impl Extractor for CreateTable {
                 "CREATE TABLE with location".into(),
             ));
         }
-        if self.engine.is_some() {
-            return Err(CvsSqlError::Unsupported("CREATE TABLE with engine".into()));
-        }
         if self.comment.is_some() {
             return Err(CvsSqlError::Unsupported("CREATE TABLE with comment".into()));
-        }
-        if self.auto_increment_offset.is_some() {
-            return Err(CvsSqlError::Unsupported(
-                "CREATE TABLE with auto increment offset".into(),
-            ));
-        }
-        if self.default_charset.is_some() {
-            return Err(CvsSqlError::Unsupported(
-                "CREATE TABLE with default charset".into(),
-            ));
-        }
-        if self.collation.is_some() {
-            return Err(CvsSqlError::Unsupported(
-                "CREATE TABLE with collation".into(),
-            ));
         }
         if self.on_commit.is_some() {
             return Err(CvsSqlError::Unsupported(
@@ -111,9 +88,6 @@ impl Extractor for CreateTable {
             return Err(CvsSqlError::Unsupported(
                 "CREATE TABLE with clustered by".into(),
             ));
-        }
-        if self.options.is_some() {
-            return Err(CvsSqlError::Unsupported("CREATE TABLE with options".into()));
         }
         if self.strict {
             return Err(CvsSqlError::Unsupported("CREATE TABLE with strict".into()));
@@ -187,6 +161,32 @@ impl Extractor for CreateTable {
                 "CREATE TABLE with storage_serialization_policy".into(),
             ));
         }
+        if self.hive_distribution != HiveDistributionStyle::NONE {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with hive distribution".into(),
+            ));
+        }
+        if let Some(hive_format) = &self.hive_formats {
+            if hive_format.location.is_some()
+                || hive_format.row_format.is_some()
+                || hive_format.serde_properties.is_some()
+                || hive_format.storage.is_some()
+            {
+                return Err(CvsSqlError::Unsupported(
+                    "CREATE TABLE with hive format".into(),
+                ));
+            }
+        }
+        if self.without_rowid {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE without rowid".into(),
+            ));
+        }
+        if self.inherits.is_some() {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with inherits".into(),
+            ));
+        }
 
         let file = if self.temporary {
             engine.create_temp_file(&self.name)?
@@ -253,8 +253,8 @@ impl Extractor for CreateTable {
 mod tests {
     use sqlparser::{
         ast::{
-            ClusteredBy, CommentDef, Expr, Ident, OneOrManyWithParens, RowAccessPolicy, SqlOption,
-            Statement, StorageSerializationPolicy, TableEngine, TableOptionsClustered, Value,
+            ClusteredBy, CommentDef, Expr, FileFormat, HiveFormat, HiveIOFormat, HiveRowFormat,
+            OneOrManyWithParens, RowAccessPolicy, Statement, StorageSerializationPolicy, Value,
             ValueWithSpan,
         },
         parser::Parser,
@@ -312,28 +312,65 @@ mod tests {
     }
 
     #[test]
-    fn table_with_properties_unsupported() -> Result<(), CvsSqlError> {
+    fn table_options_unsupported() -> Result<(), CvsSqlError> {
         test_unsupported(|create| {
-            create.table_properties = vec![SqlOption::Clustered(
-                TableOptionsClustered::ColumnstoreIndex,
-            )]
+            create.table_options = CreateTableOptions::With(vec![]);
         })
     }
 
     #[test]
-    fn table_with_option_unsupported() -> Result<(), CvsSqlError> {
+    fn hive_distribution_unsupported() -> Result<(), CvsSqlError> {
         test_unsupported(|create| {
-            create.with_options = vec![SqlOption::Clustered(
-                TableOptionsClustered::ColumnstoreIndex,
-            )]
+            create.hive_distribution = HiveDistributionStyle::PARTITIONED { columns: vec![] }
         })
     }
 
     #[test]
-    fn table_option_unsupported() -> Result<(), CvsSqlError> {
+    fn hive_formats_unsupported() -> Result<(), CvsSqlError> {
         test_unsupported(|create| {
-            create.options = Some(vec![SqlOption::Ident(Ident::new("test"))]);
+            create.hive_formats = Some(HiveFormat {
+                row_format: Some(HiveRowFormat::DELIMITED { delimiters: vec![] }),
+                serde_properties: None,
+                storage: None,
+                location: None,
+            })
+        })?;
+        test_unsupported(|create| {
+            create.hive_formats = Some(HiveFormat {
+                row_format: None,
+                serde_properties: Some(vec![]),
+                storage: None,
+                location: None,
+            })
+        })?;
+        test_unsupported(|create| {
+            create.hive_formats = Some(HiveFormat {
+                row_format: None,
+                serde_properties: None,
+                storage: Some(HiveIOFormat::FileFormat {
+                    format: FileFormat::PARQUET,
+                }),
+                location: None,
+            })
+        })?;
+        test_unsupported(|create| {
+            create.hive_formats = Some(HiveFormat {
+                row_format: None,
+                serde_properties: None,
+                storage: None,
+                location: Some(String::default()),
+            })
         })
+    }
+
+    #[test]
+    fn without_rowid_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| create.without_rowid = true)
+    }
+
+    #[test]
+    fn inherits_unsupported() -> Result<(), CvsSqlError> {
+        test_unsupported(|create| create.inherits = Some(vec![]))
     }
 
     #[test]
@@ -347,33 +384,8 @@ mod tests {
     }
 
     #[test]
-    fn table_engine_unsupported() -> Result<(), CvsSqlError> {
-        test_unsupported(|create| {
-            create.engine = Some(TableEngine {
-                name: "name".to_string(),
-                parameters: None,
-            })
-        })
-    }
-
-    #[test]
     fn table_comment_unsupported() -> Result<(), CvsSqlError> {
         test_unsupported(|create| create.comment = Some(CommentDef::WithEq("location".to_string())))
-    }
-
-    #[test]
-    fn table_auto_increment_offset_unsupported() -> Result<(), CvsSqlError> {
-        test_unsupported(|create| create.auto_increment_offset = Some(20))
-    }
-
-    #[test]
-    fn table_default_charset_unsupported() -> Result<(), CvsSqlError> {
-        test_unsupported(|create| create.default_charset = Some("utf8".to_string()))
-    }
-
-    #[test]
-    fn table_collation_unsupported() -> Result<(), CvsSqlError> {
-        test_unsupported(|create| create.collation = Some("collation".to_string()))
     }
 
     #[test]
@@ -417,9 +429,7 @@ mod tests {
     #[test]
     fn table_cluster_by_unsupported() -> Result<(), CvsSqlError> {
         test_unsupported(|create| {
-            let ident = Ident::new("value");
-
-            create.cluster_by = Some(sqlparser::ast::WrappedCollection::NoWrapping(vec![ident]))
+            create.cluster_by = Some(sqlparser::ast::WrappedCollection::NoWrapping(vec![]))
         })
     }
 

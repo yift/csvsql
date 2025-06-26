@@ -38,8 +38,8 @@ CREATE TABLE test_one(
 );
 ---
 
-CREATE TEMPORARY TABLE test_one(col TEXT);
-CREATE TEMPORARY TABLE test_one(col TEXT);
+CREATE TEMPORARY TABLE test_one_temp(col TEXT);
+CREATE TEMPORARY TABLE test_one_temp(col TEXT);
 ---
 
 CREATE TEMPORARY TABLE tests.data.artists(col TEXT);

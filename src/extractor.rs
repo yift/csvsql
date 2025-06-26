@@ -43,6 +43,7 @@ impl Extractor for Statement {
                 restrict,
                 purge,
                 temporary,
+                table,
             } => drop_table(
                 engine,
                 object_type,
@@ -52,6 +53,7 @@ impl Extractor for Statement {
                 restrict,
                 purge,
                 temporary,
+                table,
             ),
             Statement::Delete(delete) => delete.extract(engine),
             Statement::AlterTable {
@@ -61,7 +63,10 @@ impl Extractor for Statement {
                 operations,
                 location,
                 on_cluster,
-            } => alter(engine, name, *if_exists, operations, location, on_cluster),
+                iceberg,
+            } => alter(
+                engine, name, *if_exists, operations, location, on_cluster, iceberg,
+            ),
             Statement::StartTransaction {
                 modes,
                 begin: _,

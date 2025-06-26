@@ -1174,6 +1174,8 @@ impl SingleConvert for Expr {
             }
             Expr::Function(func) => func.convert_single(metadata, engine),
             Expr::Case {
+                case_token: _,
+                end_token: _,
                 operand,
                 conditions,
                 else_result,

@@ -21,6 +21,7 @@ pub(crate) fn drop_table(
     restrict: &bool,
     purge: &bool,
     temporary: &bool,
+    table: &Option<ObjectName>,
 ) -> Result<ResultSet, CvsSqlError> {
     if object_type != &ObjectType::Table {
         return Err(CvsSqlError::Unsupported(format!("DROP {}", object_type)));
@@ -36,6 +37,9 @@ pub(crate) fn drop_table(
     }
     if *purge {
         return Err(CvsSqlError::Unsupported("DROP PURGE".to_string()));
+    }
+    if table.is_some() {
+        return Err(CvsSqlError::Unsupported("DROP INDEX ON".to_string()));
     }
 
     let mut files = vec![];
@@ -107,6 +111,7 @@ mod tests {
         let restrict = false;
         let purge = false;
         let temporary = true;
+        let table = None;
 
         let Err(err) = drop_table(
             &engine,
@@ -117,6 +122,7 @@ mod tests {
             &restrict,
             &purge,
             &temporary,
+            &table,
         ) else {
             panic!("Expecting an error");
         };
@@ -143,6 +149,7 @@ mod tests {
         let restrict = false;
         let purge = false;
         let temporary = true;
+        let table = None;
 
         let Err(err) = drop_table(
             &engine,
@@ -153,6 +160,7 @@ mod tests {
             &restrict,
             &purge,
             &temporary,
+            &table,
         ) else {
             panic!("Expecting an error");
         };

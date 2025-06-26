@@ -25,6 +25,7 @@ pub(crate) fn alter(
     operations: &[AlterTableOperation],
     location: &Option<HiveSetLocation>,
     on_cluster: &Option<Ident>,
+    iceberg: &bool,
 ) -> Result<ResultSet, CvsSqlError> {
     if location.is_some() {
         return Err(CvsSqlError::Unsupported("ALTER TABLE with location".into()));
@@ -33,6 +34,9 @@ pub(crate) fn alter(
         return Err(CvsSqlError::Unsupported(
             "ALTER TABLE with ON CLUSTER".into(),
         ));
+    }
+    if *iceberg {
+        return Err(CvsSqlError::Unsupported("ALTER iceberg".into()));
     }
     let table_file = engine.file_name(name)?;
     let file_name = engine.get_file_name(&table_file);
@@ -63,6 +67,7 @@ pub(crate) fn alter(
                     add_column(current_data, *if_not_exists, column_def, column_position)?;
             }
             AlterTableOperation::DropColumn {
+                has_column_keyword: _,
                 column_name,
                 if_exists,
                 drop_behavior,
