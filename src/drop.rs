@@ -24,7 +24,7 @@ pub(crate) fn drop_table(
     table: &Option<ObjectName>,
 ) -> Result<ResultSet, CvsSqlError> {
     if object_type != &ObjectType::Table {
-        return Err(CvsSqlError::Unsupported(format!("DROP {}", object_type)));
+        return Err(CvsSqlError::Unsupported(format!("DROP {object_type}")));
     }
     if names.is_empty() {
         return Err(CvsSqlError::Unsupported("DROP without tables".to_string()));

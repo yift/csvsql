@@ -97,7 +97,7 @@ impl Engine {
         } else {
             ""
         };
-        format!("{} {}", name, active_transaction)
+        format!("{name} {active_transaction}")
     }
 
     pub(crate) fn file_name(&self, name: &ObjectName) -> Result<FoundFile, CvsSqlError> {
@@ -124,7 +124,7 @@ impl Engine {
             let name = name.to_string();
             result_name = result_name.append(&name);
             if file_names.peek().is_none() {
-                path = path.join(format!("{}.csv", name));
+                path = path.join(format!("{name}.csv"));
             } else {
                 path = path.join(name);
             }
@@ -180,10 +180,10 @@ impl Engine {
                     return Err(CvsSqlError::CannotAccessParentDir(path));
                 };
                 path = parent.to_path_buf();
-                relative = format!("{}/..", relative);
+                relative = format!("{relative}/..");
             } else {
                 path = path.join(name.to_string());
-                relative = format!("{}/{}", relative, name);
+                relative = format!("{relative}/{name}");
                 if !path.is_dir() {
                     return Err(CvsSqlError::NotADir(relative));
                 };

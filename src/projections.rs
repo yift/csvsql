@@ -92,7 +92,7 @@ impl Convert for SelectItem {
                 Ok(vec![Box::new(AliasProjection { data, alias })])
             }
             SelectItem::QualifiedWildcard(_, _) => {
-                Err(CvsSqlError::Unsupported(format!("Select {}", self)))
+                Err(CvsSqlError::Unsupported(format!("Select {self}")))
             }
         }
     }
@@ -727,7 +727,7 @@ impl InSubquery {
         let results = match subquery {
             SetExpr::Query(subquery) => subquery.extract(engine)?,
             SetExpr::Select(select) => select.extract(engine)?,
-            _ => return Err(CvsSqlError::Unsupported(format!("IN ({})", subquery))),
+            _ => return Err(CvsSqlError::Unsupported(format!("IN ({subquery})"))),
         };
         if results.metadata.number_of_columns() != 1 {
             return Err(CvsSqlError::Unsupported(
@@ -735,7 +735,7 @@ impl InSubquery {
             ));
         }
         let not = if *negated { "NOT " } else { "" };
-        let name = format!("{} {}IN ({})", expr, not, subquery);
+        let name = format!("{expr} {not}IN ({subquery})");
         let value = expr.convert_single(metadata, engine)?;
         let mut list = HashSet::new();
         let col = Column::from_index(0);
@@ -973,7 +973,7 @@ impl SingleConvert for Expr {
                     BinaryOperator::Or => Box::new(OrBinaryFunction {}),
                     BinaryOperator::Xor => Box::new(XorBinaryFunction {}),
                     _ => {
-                        return Err(CvsSqlError::Unsupported(format!("Operator: {}", op)));
+                        return Err(CvsSqlError::Unsupported(format!("Operator: {op}")));
                     }
                 };
                 Ok(Box::new(BinaryProjection::new(left, right, operator)))
@@ -998,8 +998,7 @@ impl SingleConvert for Expr {
                         name,
                     })),
                     _ => Err(CvsSqlError::Unsupported(format!(
-                        "Select literal value {}",
-                        self
+                        "Select literal value {self}"
                     ))),
                 }
             }
@@ -1086,7 +1085,7 @@ impl SingleConvert for Expr {
                     UnaryOperator::Minus => Box::new(Negative {}),
                     UnaryOperator::Plus => Box::new(PlusUnary {}),
                     UnaryOperator::Not => Box::new(Not {}),
-                    _ => return Err(CvsSqlError::Unsupported(format!("Operator: {}", op))),
+                    _ => return Err(CvsSqlError::Unsupported(format!("Operator: {op}"))),
                 };
                 let value = expr.convert_single(metadata, engine)?;
                 Ok(Box::new(UnartyProjection::new(value, operator)))
@@ -1182,8 +1181,7 @@ impl SingleConvert for Expr {
             } => new_case(operand, conditions, else_result, metadata, engine),
 
             _ => Err(CvsSqlError::Unsupported(format!(
-                "Select expression like {}",
-                self
+                "Select expression like {self}"
             ))),
         }
     }
@@ -1274,7 +1272,7 @@ fn new_case(
         Some(default) => format!("{} ELSE {}", name, default.name()),
         None => name,
     };
-    name = format!("{} END", name);
+    name = format!("{name} END");
     Ok(Box::new(Case {
         leavs,
         default,

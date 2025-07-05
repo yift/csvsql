@@ -82,8 +82,7 @@ pub(crate) fn alter(
             }
             _ => {
                 return Err(CvsSqlError::Unsupported(format!(
-                    "ALTER TABLE with operation: {}",
-                    oper
+                    "ALTER TABLE with operation: {oper}"
                 )));
             }
         }
@@ -131,16 +130,14 @@ fn add_column(
     AvailableDataTypes::try_from(&column_def.data_type)?;
     if !column_def.options.is_empty() {
         return Err(CvsSqlError::Unsupported(format!(
-            "ALTER TABLE with options - {}",
-            column_def
+            "ALTER TABLE with options - {column_def}"
         )));
     }
     let position = match &column_position {
         None => result_to_change.metadata.number_of_columns(),
         Some(p) => {
             return Err(CvsSqlError::Unsupported(format!(
-                "ALTER TABLE ADD COLUMN with position - {}",
-                p,
+                "ALTER TABLE ADD COLUMN with position - {p}",
             )));
         }
     };
@@ -180,8 +177,7 @@ fn drop_column(
 ) -> Result<ResultSet, CvsSqlError> {
     if let Some(drop) = drop_behavior {
         return Err(CvsSqlError::Unsupported(format!(
-            "ALTER TABLE DROP COLUMN ... {}",
-            drop,
+            "ALTER TABLE DROP COLUMN ... {drop}",
         )));
     }
     let name = column_name.into();

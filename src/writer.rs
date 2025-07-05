@@ -76,7 +76,7 @@ mod tests {
             let mut row = Vec::new();
             for c in 0..5 {
                 if r == 0 {
-                    metadata.add_column(format!("col {}", c).as_str());
+                    metadata.add_column(format!("col {c}").as_str());
                 }
                 row.push(Value::Number(BigDecimal::from_i32(c * 12 + r).unwrap()));
             }
@@ -110,7 +110,7 @@ mod tests {
             let mut row = Vec::new();
             for c in 0..5 {
                 if r == 0 {
-                    metadata.add_column(format!("col {}", c).as_str());
+                    metadata.add_column(format!("col {c}").as_str());
                 }
                 row.push(Value::Number(BigDecimal::from_i32(c * 12 + r).unwrap()));
             }

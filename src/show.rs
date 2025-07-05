@@ -76,13 +76,13 @@ fn dir(
         let path = path.path();
         if metadata.is_dir() && *full {
             let name = file_name.to_str().unwrap_or_default();
-            let name = format!("{}{}.", root, name);
+            let name = format!("{root}{name}.");
             dir(&path, results, full, &name)?;
         } else if metadata.is_file() {
             let Some(name) = get_table_name(&path) else {
                 continue;
             };
-            let name = format!("{}{}", root, name);
+            let name = format!("{root}{name}");
             let len = metadata.len().into();
             let absolute = path::absolute(path)?;
             let absolute = absolute.to_str().unwrap_or_default().to_string();
@@ -132,7 +132,7 @@ fn dir_dbs(path: &PathBuf, results: &mut Vec<DataRow>, root: &str) -> Result<u64
             let name = if root.is_empty() {
                 name.to_string()
             } else {
-                format!("{}.{}", root, name)
+                format!("{root}.{name}")
             };
             let tables = dir_dbs(&path, results, &name)?;
             if tables > 0 {
@@ -186,7 +186,7 @@ mod tests {
 
     fn create_table(root: &Path, name: &str, content: &str) -> Result<(), CvsSqlError> {
         let mut table = File::create(root.join(name))?;
-        writeln!(&mut table, "{}", content)?;
+        writeln!(&mut table, "{content}")?;
         Ok(())
     }
     fn create_db(root: &Path, name: &str) -> Result<PathBuf, CvsSqlError> {

@@ -171,7 +171,7 @@ mod tests {
     fn display_int_value() {
         let value = Value::Number(BigDecimal::from_i16(101).unwrap());
 
-        let str = format!("{}", value);
+        let str = format!("{value}");
 
         assert_eq!(str, "101");
     }
@@ -180,7 +180,7 @@ mod tests {
     fn display_float_value() {
         let value = Value::Number(BigDecimal::from_f32(10.25).unwrap());
 
-        let str = format!("{}", value);
+        let str = format!("{value}");
 
         assert_eq!(str, "10.25");
     }
@@ -189,7 +189,7 @@ mod tests {
     fn display_true_value() {
         let value = Value::Bool(true);
 
-        let str = format!("{}", value);
+        let str = format!("{value}");
 
         assert_eq!(str, "TRUE");
     }
@@ -198,7 +198,7 @@ mod tests {
     fn display_false_value() {
         let value = Value::Bool(false);
 
-        let str = format!("{}", value);
+        let str = format!("{value}");
 
         assert_eq!(str, "FALSE");
     }
@@ -208,7 +208,7 @@ mod tests {
         let value =
             Value::Number(BigDecimal::from_str("12312312312312312312312312313123").unwrap());
 
-        let str = format!("{}", value);
+        let str = format!("{value}");
 
         assert_eq!(str, "12312312312312312312312312313123");
     }
@@ -217,7 +217,7 @@ mod tests {
     fn display_date_value() {
         let value = Value::Date(NaiveDate::parse_from_str("2018-04-21", "%Y-%m-%d").unwrap());
 
-        let str = format!("{}", value);
+        let str = format!("{value}");
 
         assert_eq!(str, "2018-04-21");
     }
@@ -229,7 +229,7 @@ mod tests {
                 .unwrap(),
         );
 
-        let str = format!("{}", value);
+        let str = format!("{value}");
 
         assert_eq!(str, "2018-04-21 10:12:40.011");
     }
@@ -238,7 +238,7 @@ mod tests {
     fn display_string_value() {
         let value = Value::Str("test".into());
 
-        let str = format!("{}", value);
+        let str = format!("{value}");
 
         assert_eq!(str, "test");
     }
@@ -247,7 +247,7 @@ mod tests {
     fn display_empty_value() {
         let value = Value::Empty;
 
-        let str = format!("{}", value);
+        let str = format!("{value}");
 
         assert_eq!(str, "");
     }

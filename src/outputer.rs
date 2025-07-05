@@ -349,8 +349,7 @@ impl Outputer for JsonOutputer {
                 path.to_str().unwrap_or_default()
             ))),
             Err(e) => Err(CvsSqlError::OutputCreationError(format!(
-                "Can not write json: {}",
-                e
+                "Can not write json: {e}"
             ))),
         }
     }
@@ -391,7 +390,7 @@ impl XlsxOutputer {
 
     fn add_worksheet(&mut self, execution: &CommandExecution) -> Result<(), XlsxError> {
         let index = self.workbook.worksheets().len() as u32;
-        let name = format!("Results {}", index);
+        let name = format!("Results {index}");
         let sqls = self.workbook.worksheet_from_name("sqls").unwrap();
         let monospace = Format::new().set_font_name("Courier New");
 
@@ -475,8 +474,7 @@ impl Outputer for XlsxOutputer {
                 self.path.to_str().unwrap_or_default()
             ))),
             Err(err) => Err(CvsSqlError::OutputCreationError(format!(
-                "Xlsx error: {}",
-                err
+                "Xlsx error: {err}"
             ))),
         }
     }

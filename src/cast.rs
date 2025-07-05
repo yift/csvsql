@@ -100,7 +100,7 @@ impl TryFrom<&DataType> for AvailableDataTypes {
             | DataType::Datetime64(_, _)
             | DataType::Timestamp(_, _) => Ok(AvailableDataTypes::Timestamp),
 
-            _ => Err(CvsSqlError::Unsupported(format!("data type {}", value))),
+            _ => Err(CvsSqlError::Unsupported(format!("data type {value}"))),
         }
     }
 }
@@ -149,7 +149,7 @@ impl AvailableDataTypes {
 fn convert_to_string(value: SmartReference<'_, Value>) -> SmartReference<'_, Value> {
     match value.deref() {
         Value::Empty | Value::Str(_) => value,
-        _ => Value::Str(format!("{}", value)).into(),
+        _ => Value::Str(format!("{value}")).into(),
     }
 }
 fn convert_to_number(value: SmartReference<'_, Value>) -> SmartReference<'_, Value> {

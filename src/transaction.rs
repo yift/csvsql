@@ -111,8 +111,7 @@ pub(crate) fn start_transaction(
     if let Some(kind) = transaction {
         if kind != &BeginTransactionKind::Transaction {
             return Err(CvsSqlError::Unsupported(format!(
-                "Transactions with kind {}",
-                kind
+                "Transactions with kind {kind}"
             )));
         }
     }

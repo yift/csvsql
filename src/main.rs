@@ -15,7 +15,7 @@ fn main() -> Result<(), CvsSqlError> {
         for command in commands {
             for results in engine.execute_commands(&command)? {
                 if let Some(out) = outputer.write(&results)? {
-                    println!("{}", out);
+                    println!("{out}");
                 }
             }
         }

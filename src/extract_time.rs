@@ -70,8 +70,7 @@ impl TryFrom<&DateTimeField> for Field {
             DateTimeField::Milliseconds | DateTimeField::Millisecond => Ok(Field::Millisecond),
             DateTimeField::Nanoseconds | DateTimeField::Nanosecond => Ok(Field::Nanosecond),
             _ => Err(CvsSqlError::Unsupported(format!(
-                "EXTRACT(... FROM {})",
-                value
+                "EXTRACT(... FROM {value})"
             ))),
         }
     }

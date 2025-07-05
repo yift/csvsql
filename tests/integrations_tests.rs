@@ -1475,7 +1475,7 @@ fn sql_tests() -> Result<(), CvsSqlError> {
             }
             let output = String::from_utf8(output).unwrap();
 
-            let result_file = path.join(format!("results.{}.csv", idx));
+            let result_file = path.join(format!("results.{idx}.csv"));
             if !result_file.exists() && env::var("CREATE_RESULTS").is_ok() {
                 println!("\t CREATING FILE {:?}", result_file.file_name().unwrap());
                 let mut file = File::create(result_file)?;
@@ -1528,7 +1528,7 @@ fn sql_errors() -> Result<(), CvsSqlError> {
                 panic!("SQL: {} should have failed", sql);
             };
             let output = err.to_string();
-            let error_file = path.join(format!("error.{}.txt", idx));
+            let error_file = path.join(format!("error.{idx}.txt"));
             if !error_file.exists() && env::var("CREATE_RESULTS").is_ok() {
                 println!("\t CREATING FILE {:?}", error_file.file_name().unwrap());
                 let mut file = File::create(error_file)?;

@@ -112,7 +112,7 @@ fn build_function_from_name(
         "POW" | "POWER" => build_function(metadata, engine, args, Box::new(Power {})),
         "ROUND" => build_function(metadata, engine, args, Box::new(Round {})),
         "SQRT" => build_function(metadata, engine, args, Box::new(Sqrt {})),
-        _ => Err(CvsSqlError::Unsupported(format!("function {}", name))),
+        _ => Err(CvsSqlError::Unsupported(format!("function {name}"))),
     }
 }
 
@@ -143,7 +143,7 @@ fn build_aggregator_function(
     let distinct = matches!(lst.duplicate_treatment, Some(DuplicateTreatment::Distinct));
 
     if let Some(c) = lst.clauses.first() {
-        return Err(CvsSqlError::Unsupported(format!("{}", c)));
+        return Err(CvsSqlError::Unsupported(format!("{c}")));
     }
     let first = match lst.args.first() {
         Some(arg) => arg,
@@ -177,7 +177,7 @@ fn build_aggregator_function(
                 )));
             }
         }
-        _ => return Err(CvsSqlError::Unsupported(format!("{}", first))),
+        _ => return Err(CvsSqlError::Unsupported(format!("{first}"))),
     };
     let name = format!("{}({})", operator.name(), argument.name());
 
@@ -522,7 +522,7 @@ mod test_aggregations {
             .open(&file)?;
         writeln!(writer, "row")?;
         for data in &example.data {
-            writeln!(writer, "{}", data)?;
+            writeln!(writer, "{data}")?;
         }
 
         let table_name = format!(
@@ -644,7 +644,7 @@ fn build_function(
                 )));
             }
             if let Some(c) = lst.clauses.first() {
-                return Err(CvsSqlError::Unsupported(format!("{}", c)));
+                return Err(CvsSqlError::Unsupported(format!("{c}")));
             }
             let mut args = vec![];
             for a in &lst.args {
@@ -2149,7 +2149,7 @@ impl Operator for RegexLike {
                 return Value::Empty.into();
             };
 
-            Regex::new(format!("(?{}:{})", flags, pattern).as_str())
+            Regex::new(format!("(?{flags}:{pattern})").as_str())
         } else {
             Regex::new(pattern)
         };
@@ -2265,7 +2265,7 @@ impl Operator for RegexSubstring {
                 return Value::Empty.into();
             };
 
-            Regex::new(format!("(?{}:{})", flags, pattern).as_str())
+            Regex::new(format!("(?{flags}:{pattern})").as_str())
         } else {
             Regex::new(pattern)
         };
@@ -2924,7 +2924,7 @@ mod tests_functions {
         println!("testing: {} with {}", operator.name(), name);
         let dir = format!("./target/function_tests/{}", operator.name().to_lowercase());
         fs::create_dir_all(&dir)?;
-        let file = format!("{}/{}.csv", dir, name);
+        let file = format!("{dir}/{name}.csv");
         let mut writer = OpenOptions::new()
             .write(true)
             .create(true)
@@ -2932,11 +2932,11 @@ mod tests_functions {
             .open(&file)?;
         let header = ('a'..='z')
             .take(arguments.len())
-            .map(|c| format!("{}", c))
+            .map(|c| format!("{c}"))
             .join(",");
-        writeln!(writer, "{},name", header)?;
+        writeln!(writer, "{header},name")?;
         let line = arguments.join(",");
-        writeln!(writer, "{},{}", line, name)?;
+        writeln!(writer, "{line},{name}")?;
 
         let table_name = format!(
             "target.function_tests.{}.{}",

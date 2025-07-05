@@ -41,7 +41,7 @@ impl Extractor for Values {
         let data = ResultsData::new(data);
         let mut metadata = SimpleResultSetMetadata::new(None);
         for i in 0..size {
-            metadata.add_column(&format!("{}", i));
+            metadata.add_column(&format!("{i}"));
         }
         let metadata = Rc::new(metadata.build());
 

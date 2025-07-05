@@ -112,17 +112,17 @@ fn use_readline(engine: &Engine, outputer: &mut dyn Outputer) -> Result<(), CvsS
 trait ReplOutputer {
     fn get_commands(&mut self, prompt: &str) -> Result<Option<String>, CvsSqlError>;
     fn print_error(&self, err: CvsSqlError) {
-        eprintln!("Got error: {}", err)
+        eprintln!("Got error: {err}")
     }
     fn print_output(&self, output: &str) {
-        println!("{}", output)
+        println!("{output}")
     }
 }
 struct SimpleStdRepl {}
 impl ReplOutputer for SimpleStdRepl {
     fn get_commands(&mut self, prompt: &str) -> Result<Option<String>, CvsSqlError> {
         let mut stdout = io::stdout().lock();
-        print!("{} > ", prompt);
+        print!("{prompt} > ");
         stdout.flush()?;
 
         let stdin = io::stdin();
