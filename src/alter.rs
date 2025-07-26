@@ -1,4 +1,4 @@
-use std::{fs::OpenOptions, rc::Rc};
+use std::{collections::HashSet, fs::OpenOptions, rc::Rc};
 
 use sqlparser::ast::{
     AlterTableOperation, ColumnDef, DropBehavior, HiveSetLocation, Ident, MySQLColumnPosition,
@@ -68,11 +68,11 @@ pub(crate) fn alter(
             }
             AlterTableOperation::DropColumn {
                 has_column_keyword: _,
-                column_name,
+                column_names,
                 if_exists,
                 drop_behavior,
             } => {
-                current_data = drop_column(current_data, column_name, if_exists, drop_behavior)?;
+                current_data = drop_column(current_data, column_names, if_exists, drop_behavior)?;
             }
             AlterTableOperation::RenameColumn {
                 old_column_name,
@@ -171,7 +171,7 @@ fn add_column(
 
 fn drop_column(
     result_to_change: ResultSet,
-    column_name: &Ident,
+    column_names: &[Ident],
     if_exists: &bool,
     drop_behavior: &Option<DropBehavior>,
 ) -> Result<ResultSet, CvsSqlError> {
@@ -180,29 +180,35 @@ fn drop_column(
             "ALTER TABLE DROP COLUMN ... {drop}",
         )));
     }
-    let name = column_name.into();
-    let index = match result_to_change.metadata.column_index(&name) {
-        Ok(index) => index,
-        Err(err) => {
-            if *if_exists {
-                return Ok(result_to_change);
-            } else {
-                return Err(err.into());
+    let mut indices = HashSet::new();
+    for column_name in column_names {
+        let name = column_name.into();
+        let index = match result_to_change.metadata.column_index(&name) {
+            Ok(index) => index,
+            Err(err) => {
+                if *if_exists {
+                    return Ok(result_to_change);
+                } else {
+                    return Err(err.into());
+                }
             }
-        }
-    };
+        };
+        indices.insert(index.get_index());
+    }
     let mut metadata =
         SimpleResultSetMetadata::new(result_to_change.metadata.result_name().cloned());
 
     for col in result_to_change.columns() {
-        if col.get_index() != index.get_index() {
+        if !indices.contains(&col.get_index()) {
             let current_name = result_to_change.metadata.column_title(&col);
             metadata.add_column(current_name);
         }
     }
     let mut rows = vec![];
     for mut row in result_to_change.data.into_iter() {
-        row.delete_at(&index);
+        for index in indices.iter() {
+            row.delete_at(&Column::from_index(*index));
+        }
         rows.push(row);
     }
 

@@ -1,8 +1,8 @@
 use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
 use regex::Regex;
 use sqlparser::ast::{
-    BinaryOperator, CaseWhen, CeilFloorKind, DateTimeField, Expr, SelectItem, SetExpr,
-    UnaryOperator, WildcardAdditionalOptions,
+    BinaryOperator, CaseWhen, CeilFloorKind, DateTimeField, Expr, Query, SelectItem, UnaryOperator,
+    WildcardAdditionalOptions,
 };
 
 use crate::cast::create_cast;
@@ -719,16 +719,12 @@ impl Projection for InSubquery {
 impl InSubquery {
     fn new(
         expr: &Expr,
-        subquery: &SetExpr,
+        subquery: &Query,
         negated: &bool,
         engine: &Engine,
         metadata: &Metadata,
     ) -> Result<Self, CvsSqlError> {
-        let results = match subquery {
-            SetExpr::Query(subquery) => subquery.extract(engine)?,
-            SetExpr::Select(select) => select.extract(engine)?,
-            _ => return Err(CvsSqlError::Unsupported(format!("IN ({subquery})"))),
-        };
+        let results = subquery.extract(engine)?;
         if results.metadata.number_of_columns() != 1 {
             return Err(CvsSqlError::Unsupported(
                 "IN (SELECT ...) with more than one column".into(),

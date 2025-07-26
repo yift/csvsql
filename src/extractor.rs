@@ -73,16 +73,9 @@ impl Extractor for Statement {
                 transaction,
                 modifier,
                 statements,
-                exception_statements,
+                exception,
                 has_end_keyword: _,
-            } => start_transaction(
-                engine,
-                modes,
-                transaction,
-                modifier,
-                statements,
-                exception_statements,
-            ),
+            } => start_transaction(engine, modes, transaction, modifier, statements, exception),
             Statement::Commit {
                 chain: _,
                 end: _,

@@ -6,7 +6,7 @@ use std::{
 
 use sha256::try_digest;
 use sqlparser::ast::{
-    BeginTransactionKind, Ident, Statement, TransactionMode, TransactionModifier,
+    BeginTransactionKind, ExceptionWhen, Ident, Statement, TransactionMode, TransactionModifier,
 };
 use tempfile::NamedTempFile;
 
@@ -96,7 +96,7 @@ pub(crate) fn start_transaction(
     transaction: &Option<BeginTransactionKind>,
     modifier: &Option<TransactionModifier>,
     statements: &[Statement],
-    exception_statements: &Option<Vec<Statement>>,
+    exception: &Option<Vec<ExceptionWhen>>,
 ) -> Result<ResultSet, CvsSqlError> {
     if !modes.is_empty() {
         return Err(CvsSqlError::Unsupported(
@@ -120,7 +120,7 @@ pub(crate) fn start_transaction(
             "Transactions with statement".to_string(),
         ));
     }
-    if exception_statements.is_some() {
+    if exception.is_some() {
         return Err(CvsSqlError::Unsupported(
             "Transactions with exception statements".to_string(),
         ));
