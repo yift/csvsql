@@ -198,20 +198,20 @@ impl TableApp {
         loop {
             self.draw_on_term(terminal)?;
 
-            if let Event::Key(key) = (self.next_event)()? {
-                if key.kind == KeyEventKind::Press {
-                    match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
-                        KeyCode::Char('j') | KeyCode::Down => self.next_row(),
-                        KeyCode::Char('k') | KeyCode::Up => self.previous_row(),
-                        KeyCode::Char('l') | KeyCode::Right => self.next_column(),
-                        KeyCode::Char('h') | KeyCode::Left => self.previous_column(),
-                        KeyCode::PageDown => self.next_rows(),
-                        KeyCode::PageUp => self.previous_rows(),
-                        KeyCode::End => self.end(),
-                        KeyCode::Home => self.home(),
-                        _ => {}
-                    }
+            if let Event::Key(key) = (self.next_event)()?
+                && key.kind == KeyEventKind::Press
+            {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                    KeyCode::Char('j') | KeyCode::Down => self.next_row(),
+                    KeyCode::Char('k') | KeyCode::Up => self.previous_row(),
+                    KeyCode::Char('l') | KeyCode::Right => self.next_column(),
+                    KeyCode::Char('h') | KeyCode::Left => self.previous_column(),
+                    KeyCode::PageDown => self.next_rows(),
+                    KeyCode::PageUp => self.previous_rows(),
+                    KeyCode::End => self.end(),
+                    KeyCode::Home => self.home(),
+                    _ => {}
                 }
             }
         }

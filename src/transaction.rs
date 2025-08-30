@@ -108,12 +108,12 @@ pub(crate) fn start_transaction(
             "Transactions with modifier".to_string(),
         ));
     }
-    if let Some(kind) = transaction {
-        if kind != &BeginTransactionKind::Transaction {
-            return Err(CvsSqlError::Unsupported(format!(
-                "Transactions with kind {kind}"
-            )));
-        }
+    if let Some(kind) = transaction
+        && kind != &BeginTransactionKind::Transaction
+    {
+        return Err(CvsSqlError::Unsupported(format!(
+            "Transactions with kind {kind}"
+        )));
     }
     if !statements.is_empty() {
         return Err(CvsSqlError::Unsupported(

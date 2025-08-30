@@ -1448,14 +1448,12 @@ fn sql_tests() -> Result<(), CvsSqlError> {
         if cfg_file.exists() {
             let content = std::fs::read_to_string(cfg_file)?;
             let cfg = content.parse::<Table>().unwrap();
-            if let Some(test_config) = cfg.get("test") {
-                if let Some(table) = test_config.as_table() {
-                    if let Some(ro) = table.get("read_only") {
-                        if let Some(ro) = ro.as_bool() {
-                            read_only = ro;
-                        }
-                    }
-                }
+            if let Some(test_config) = cfg.get("test")
+                && let Some(table) = test_config.as_table()
+                && let Some(ro) = table.get("read_only")
+                && let Some(ro) = ro.as_bool()
+            {
+                read_only = ro;
             }
         }
         let args = Args {
@@ -1501,14 +1499,12 @@ fn sql_errors() -> Result<(), CvsSqlError> {
         if cfg_file.exists() {
             let content = std::fs::read_to_string(cfg_file)?;
             let cfg = content.parse::<Table>().unwrap();
-            if let Some(test_config) = cfg.get("test") {
-                if let Some(table) = test_config.as_table() {
-                    if let Some(ro) = table.get("read_only") {
-                        if let Some(ro) = ro.as_bool() {
-                            read_only = ro;
-                        }
-                    }
-                }
+            if let Some(test_config) = cfg.get("test")
+                && let Some(table) = test_config.as_table()
+                && let Some(ro) = table.get("read_only")
+                && let Some(ro) = ro.as_bool()
+            {
+                read_only = ro;
             }
         }
         let args = Args {

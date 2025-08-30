@@ -69,10 +69,10 @@ impl Session {
     }
 
     pub(crate) fn get_temporary_table(&self, name: &Name) -> Option<PathBuf> {
-        if let Some(transaction) = &self.transaction {
-            if let Some(path) = transaction.temporary_tables.get_temporary_table(name) {
-                return Some(path);
-            }
+        if let Some(transaction) = &self.transaction
+            && let Some(path) = transaction.temporary_tables.get_temporary_table(name)
+        {
+            return Some(path);
         }
         self.temporary_tables.get_temporary_table(name)
     }

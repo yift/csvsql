@@ -101,20 +101,19 @@ impl Engine {
     }
 
     pub(crate) fn file_name(&self, name: &ObjectName) -> Result<FoundFile, CvsSqlError> {
-        if name.0.len() == 1 {
-            if let Some(name) = name.0.first() {
-                if name.to_string() == "$" {
-                    let path = self.stdin.borrow_mut().path()?;
-                    return Ok(FoundFile {
-                        is_temp: false,
-                        path,
-                        result_name: "$".into(),
-                        exists: true,
-                        original_path: None,
-                        read_only: true,
-                    });
-                }
-            }
+        if name.0.len() == 1
+            && let Some(name) = name.0.first()
+            && name.to_string() == "$"
+        {
+            let path = self.stdin.borrow_mut().path()?;
+            return Ok(FoundFile {
+                is_temp: false,
+                path,
+                result_name: "$".into(),
+                exists: true,
+                original_path: None,
+                read_only: true,
+            });
         }
         let file_name = &name.0;
         let mut file_names = file_name.iter().peekable();

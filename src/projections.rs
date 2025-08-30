@@ -148,7 +148,7 @@ trait BinaryFunction {
         &self,
         left: SmartReference<Value>,
         right: SmartReference<Value>,
-    ) -> SmartReference<Value>;
+    ) -> SmartReference<'_, Value>;
     fn name(&self) -> &str;
 }
 
@@ -456,7 +456,7 @@ impl Projection for ValueProjection {
 }
 
 trait UnaryFunction {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value>;
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value>;
     fn name(&self) -> &str;
     fn function_type(&self) -> UnaryFunctionType;
 }
@@ -504,7 +504,7 @@ impl UnartyProjection {
 
 struct IsFalse {}
 impl UnaryFunction for IsFalse {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         Value::Bool(value.deref() == &Value::Bool(false)).into()
     }
     fn name(&self) -> &str {
@@ -517,7 +517,7 @@ impl UnaryFunction for IsFalse {
 
 struct IsNotFalse {}
 impl UnaryFunction for IsNotFalse {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         Value::Bool(value.deref() != &Value::Bool(false)).into()
     }
     fn name(&self) -> &str {
@@ -529,7 +529,7 @@ impl UnaryFunction for IsNotFalse {
 }
 struct IsTrue {}
 impl UnaryFunction for IsTrue {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         Value::Bool(value.deref() == &Value::Bool(true)).into()
     }
     fn name(&self) -> &str {
@@ -542,7 +542,7 @@ impl UnaryFunction for IsTrue {
 
 struct IsNotTrue {}
 impl UnaryFunction for IsNotTrue {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         Value::Bool(value.deref() != &Value::Bool(true)).into()
     }
     fn name(&self) -> &str {
@@ -555,7 +555,7 @@ impl UnaryFunction for IsNotTrue {
 
 struct IsNull {}
 impl UnaryFunction for IsNull {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         Value::Bool(value.deref() == &Value::Empty).into()
     }
     fn name(&self) -> &str {
@@ -568,7 +568,7 @@ impl UnaryFunction for IsNull {
 
 struct IsNotNull {}
 impl UnaryFunction for IsNotNull {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         Value::Bool(value.deref() != &Value::Empty).into()
     }
     fn name(&self) -> &str {
@@ -581,7 +581,7 @@ impl UnaryFunction for IsNotNull {
 
 struct Not {}
 impl UnaryFunction for Not {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         match value.deref() {
             Value::Empty => Value::Empty.into(),
             Value::Bool(false) => Value::Bool(true).into(),
@@ -598,7 +598,7 @@ impl UnaryFunction for Not {
 
 struct Negative {}
 impl UnaryFunction for Negative {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         match value.deref() {
             Value::Number(num) => Value::Number(-num).into(),
             _ => Value::Empty.into(),
@@ -614,7 +614,7 @@ impl UnaryFunction for Negative {
 
 struct PlusUnary {}
 impl UnaryFunction for PlusUnary {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         match value.deref() {
             Value::Number(num) => Value::Number(num.clone()).into(),
             _ => Value::Empty.into(),
@@ -630,7 +630,7 @@ impl UnaryFunction for PlusUnary {
 
 struct Ceil {}
 impl UnaryFunction for Ceil {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         match value.deref() {
             Value::Number(num) => {
                 Value::Number(num.with_scale_round(0, bigdecimal::RoundingMode::Ceiling)).into()
@@ -648,7 +648,7 @@ impl UnaryFunction for Ceil {
 
 struct Floor {}
 impl UnaryFunction for Floor {
-    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<Value> {
+    fn calculate(&self, value: SmartReference<Value>) -> SmartReference<'_, Value> {
         match value.deref() {
             Value::Number(num) => {
                 Value::Number(num.with_scale_round(0, bigdecimal::RoundingMode::Floor)).into()

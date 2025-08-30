@@ -17,7 +17,10 @@ pub enum Metadata {
     },
 }
 impl Metadata {
-    pub fn column_index(&self, name: &Name) -> Result<SmartReference<Column>, ColumnIndexError> {
+    pub fn column_index(
+        &self,
+        name: &Name,
+    ) -> Result<SmartReference<'_, Column>, ColumnIndexError> {
         match self {
             Metadata::Simple(data) => data.column_index(name),
             Metadata::Product(data) => data.column_index(name),
@@ -70,7 +73,7 @@ impl ProductResultSetMetadata {
     fn column_index(
         &self,
         name: &crate::results::Name,
-    ) -> Result<SmartReference<Column>, ColumnIndexError> {
+    ) -> Result<SmartReference<'_, Column>, ColumnIndexError> {
         let left_result = self.left.column_index(name);
         let right_result = self.right.column_index(name);
         match (&left_result, &right_result) {
@@ -111,7 +114,7 @@ impl SimpleResultSetMetadata {
     fn column_name(&self, column: &Column) -> Option<&Name> {
         self.columns.get(column.get_index())
     }
-    fn column_index(&self, name: &Name) -> Result<SmartReference<Column>, ColumnIndexError> {
+    fn column_index(&self, name: &Name) -> Result<SmartReference<'_, Column>, ColumnIndexError> {
         match self.column_names.get(name) {
             None => Err(ColumnIndexError::NoSuchColumn(name.full_name())),
             Some(ColumnInResult::Ambiguous) => {

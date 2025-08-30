@@ -678,14 +678,14 @@ fn build_function(
             arguments.len()
         )));
     }
-    if let Some(max) = operator.max_args() {
-        if arguments.len() > max {
-            return Err(CvsSqlError::Unsupported(format!(
-                "Function {} with {} arguments or more",
-                operator.name(),
-                arguments.len()
-            )));
-        }
+    if let Some(max) = operator.max_args()
+        && arguments.len() > max
+    {
+        return Err(CvsSqlError::Unsupported(format!(
+            "Function {} with {} arguments or more",
+            operator.name(),
+            arguments.len()
+        )));
     }
     let name = format!(
         "{}({})",

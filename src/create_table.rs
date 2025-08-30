@@ -166,16 +166,15 @@ impl Extractor for CreateTable {
                 "CREATE TABLE with hive distribution".into(),
             ));
         }
-        if let Some(hive_format) = &self.hive_formats {
-            if hive_format.location.is_some()
+        if let Some(hive_format) = &self.hive_formats
+            && (hive_format.location.is_some()
                 || hive_format.row_format.is_some()
                 || hive_format.serde_properties.is_some()
-                || hive_format.storage.is_some()
-            {
-                return Err(CvsSqlError::Unsupported(
-                    "CREATE TABLE with hive format".into(),
-                ));
-            }
+                || hive_format.storage.is_some())
+        {
+            return Err(CvsSqlError::Unsupported(
+                "CREATE TABLE with hive format".into(),
+            ));
         }
         if self.without_rowid {
             return Err(CvsSqlError::Unsupported(
