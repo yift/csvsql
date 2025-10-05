@@ -34,7 +34,8 @@ impl Extractor for Statement {
                 selection,
                 returning,
                 or,
-            } => update_table(engine, table, assignments, selection, returning, or),
+                limit,
+            } => update_table(engine, table, assignments, selection, returning, or, limit),
             Statement::Drop {
                 object_type,
                 if_exists,
@@ -64,6 +65,7 @@ impl Extractor for Statement {
                 location,
                 on_cluster,
                 iceberg,
+                end_token: _,
             } => alter(
                 engine, name, *if_exists, operations, location, on_cluster, iceberg,
             ),

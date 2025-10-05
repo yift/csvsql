@@ -25,6 +25,7 @@ pub(crate) fn update_table(
     selection: &Option<Expr>,
     returning: &Option<Vec<SelectItem>>,
     or: &Option<SqliteOnConflict>,
+    limit: &Option<Expr>,
 ) -> Result<ResultSet, CvsSqlError> {
     if !table.joins.is_empty() {
         return Err(CvsSqlError::Unsupported("Update with join".to_string()));
@@ -38,6 +39,9 @@ pub(crate) fn update_table(
         return Err(CvsSqlError::Unsupported(
             "Update with returning".to_string(),
         ));
+    }
+    if limit.is_some() {
+        return Err(CvsSqlError::Unsupported("Update with limit".to_string()));
     }
     if or.is_some() {
         return Err(CvsSqlError::Unsupported("Update with or".to_string()));

@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::rc::Rc;
 
-use sqlparser::ast::{CreateTable, CreateTableOptions, HiveDistributionStyle};
+use sqlparser::ast::{CreateTable, CreateTableLikeKind, CreateTableOptions, HiveDistributionStyle};
 
 use crate::cast::AvailableDataTypes;
 use crate::engine::Engine;
@@ -214,7 +214,11 @@ impl Extractor for CreateTable {
         } else if let Some(query) = &self.query {
             query.extract(engine)?
         } else if let Some(like) = &self.like {
-            let data = read_file(engine, like)?;
+            let like = match like {
+                CreateTableLikeKind::Parenthesized(like) => like,
+                CreateTableLikeKind::Plain(like) => like,
+            };
+            let data = read_file(engine, &like.name)?;
             ResultSet {
                 metadata: data.metadata.clone(),
                 data: ResultsData::new(vec![]),
