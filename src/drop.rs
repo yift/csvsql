@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn drop_empty_list() -> Result<(), CvsSqlError> {
         let args = Args {
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
 
@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn drop_empty_temp_not_a_temp() -> Result<(), CvsSqlError> {
         let args = Args {
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
 

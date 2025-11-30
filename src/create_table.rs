@@ -270,7 +270,7 @@ mod tests {
 
     fn test_unsupported(change: fn(&mut CreateTable)) -> Result<(), CvsSqlError> {
         let args = Args {
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
 

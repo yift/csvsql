@@ -176,7 +176,7 @@ mod tests {
         fs::write(table, "col\n1\n2\n")?;
 
         let args = Args {
-            writer_mode: true,
+            write_mode: true,
             home: Some(working_dir.path().to_path_buf()),
             ..Args::default()
         };
@@ -206,7 +206,7 @@ mod tests {
 
         let args = Args {
             home: Some(working_dir.path().to_path_buf()),
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
         let engine_with_transaction = Engine::try_from(&args)?;
@@ -233,7 +233,7 @@ mod tests {
 
         let args = Args {
             home: Some(working_dir.path().to_path_buf()),
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
         let engine_with_transaction = Engine::try_from(&args)?;
@@ -260,7 +260,7 @@ mod tests {
 
         let args = Args {
             home: Some(working_dir.path().to_path_buf()),
-            writer_mode: false,
+            write_mode: false,
             ..Args::default()
         };
         let engine_with_transaction = Engine::try_from(&args)?;

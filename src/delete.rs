@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn test_delete_without_tables() -> Result<(), CvsSqlError> {
         let args = Args {
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
 
@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn test_delete_not_a_table() -> Result<(), CvsSqlError> {
         let args = Args {
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
 

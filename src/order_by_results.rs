@@ -105,7 +105,7 @@ mod tests {
 
     fn test_unsupported_order_by(change: fn(&mut OrderBy)) -> Result<(), CvsSqlError> {
         let args = Args {
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
 

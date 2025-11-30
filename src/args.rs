@@ -9,7 +9,7 @@ pub enum OutputFormat {
     /// CSV file format
     #[default]
     Csv,
-    /// Tab separated text
+    /// Tab-separated text
     Txt,
     /// HTML files
     Html,
@@ -20,37 +20,45 @@ pub enum OutputFormat {
 }
 
 #[derive(Parser, Debug, Default)]
-#[command(version, about, long_about = None)]
+#[command(
+    version,
+    about = "CSV SQL-like engine for command line CSV manipulation",
+    long_about = "A SQL-like engine for reading and manipulating CSV files from the command line.\n\
+                  A fast alternative to Excel/LibreOffice for CSV operations."
+)]
 pub struct Args {
-    /// SQL command to execute. If omitted the engine will read the command from the standard input. If set, the standard input can be used as table named '$'.
+    /// SQL command to execute. If omitted, the engine will read commands from standard input.
+    /// If set, standard input can be used as a table named '$'.
     #[arg(short, long)]
     pub command: Option<Vec<String>>,
 
-    /// Use excel like column name (if not set, the first line of the file will be the column name)
+    /// Use Excel-like column names (if not set, the first line of each file will be used as column names)
     #[arg(short, long, default_value_t = false)]
     pub first_line_as_data: bool,
 
-    /// Home directory
+    /// Home directory (base path for CSV files and databases). Defaults to current directory.
     #[arg(short = 'm', long)]
+    #[arg(value_hint = clap::ValueHint::DirPath)]
     pub home: Option<PathBuf>,
 
-    /// Run with simple stdio
+    /// Disable interactive terminal mode and use simple stdio (for pipes and scripts)
     #[arg(short, long, default_value_t = false)]
     pub no_console: bool,
 
-    /// Output directory
+    /// Output directory for saving results
     #[arg(short, long)]
+    #[arg(value_hint = clap::ValueHint::DirPath)]
     pub output: Option<PathBuf>,
 
-    /// The output format when output is set
+    /// Output format when saving to files
     #[arg(short='p', long, value_enum, default_value_t=OutputFormat::Csv)]
     pub output_format: OutputFormat,
 
-    /// Display output as CSV in console (valid only in console mode)
+    /// Display output as CSV in console instead of as a table (valid only in console mode)
     #[arg(short, long, default_value_t = false)]
     pub display_as_csv: bool,
 
-    /// Allow to modify file
+    /// Enable write mode to allow modifying files
     #[arg(short, long, default_value_t = false)]
-    pub writer_mode: bool,
+    pub write_mode: bool,
 }

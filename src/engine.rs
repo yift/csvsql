@@ -33,7 +33,7 @@ impl TryFrom<&Args> for Engine {
             home,
             first_line_as_name: !args.first_line_as_data,
             session: RefCell::new(Session::default()),
-            read_only: !args.writer_mode,
+            read_only: !args.write_mode,
             stdin,
         })
     }

@@ -3229,7 +3229,7 @@ mod tests_functions {
 
     fn test_unsupported(change: fn(&mut Function)) -> Result<(), CvsSqlError> {
         let args = Args {
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
 

@@ -1457,7 +1457,7 @@ fn sql_tests() -> Result<(), CvsSqlError> {
             }
         }
         let args = Args {
-            writer_mode: !read_only,
+            write_mode: !read_only,
             ..Args::default()
         };
 
@@ -1508,7 +1508,7 @@ fn sql_errors() -> Result<(), CvsSqlError> {
             }
         }
         let args = Args {
-            writer_mode: !read_only,
+            write_mode: !read_only,
             ..Args::default()
         };
 

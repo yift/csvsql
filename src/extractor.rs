@@ -399,7 +399,7 @@ mod tests {
 
     fn test_unsupported_extractor(change: impl Fn(&mut Query)) -> Result<(), CvsSqlError> {
         let args = Args {
-            writer_mode: true,
+            write_mode: true,
             ..Args::default()
         };
 
