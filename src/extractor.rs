@@ -27,15 +27,15 @@ impl Extractor for Statement {
             Statement::Query(query) => query.extract(engine),
             Statement::CreateTable(table) => table.extract(engine),
             Statement::Insert(insert) => insert.extract(engine),
-            Statement::Update {
-                table,
-                assignments,
-                from: _,
-                selection,
-                returning,
-                or,
-                limit,
-            } => update_table(engine, table, assignments, selection, returning, or, limit),
+            Statement::Update(u) => update_table(
+                engine,
+                &u.table,
+                &u.assignments,
+                &u.selection,
+                &u.returning,
+                &u.or,
+                &u.limit,
+            ),
             Statement::Drop {
                 object_type,
                 if_exists,
@@ -57,17 +57,13 @@ impl Extractor for Statement {
                 table,
             ),
             Statement::Delete(delete) => delete.extract(engine),
-            Statement::AlterTable {
-                name,
-                if_exists,
-                only: _,
-                operations,
-                location,
-                on_cluster,
-                iceberg,
-                end_token: _,
-            } => alter(
-                engine, name, *if_exists, operations, location, on_cluster, iceberg,
+            Statement::AlterTable(a) => alter(
+                engine,
+                &a.name,
+                a.if_exists,
+                &a.operations,
+                &a.location,
+                &a.on_cluster,
             ),
             Statement::StartTransaction {
                 modes,
@@ -682,6 +678,7 @@ mod tests {
                     *alias = Some(TableAlias {
                         name: Ident::from("name"),
                         columns: vec![defs],
+                        explicit: true,
                     });
                 }
                 _ => {
