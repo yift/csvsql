@@ -16,6 +16,8 @@ pub enum CvsSqlError {
     WriterError(#[from] WriterError),
     #[error("IO Error: `{0}`")]
     IoError(#[from] IoError),
+    #[error("Terminal error: {0}")]
+    Terminal(String),
     #[error("CSV Error: `{0}`")]
     CsvError(#[from] CsvError),
     #[error("Unsupported: `{0}`")]

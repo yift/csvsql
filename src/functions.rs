@@ -1129,7 +1129,10 @@ impl Operator for Now {
 struct User {}
 impl Operator for User {
     fn get<'a>(&'a self, _: &[SmartReference<'a, Value>]) -> SmartReference<'a, Value> {
-        Value::Str(whoami::username()).into()
+        match whoami::username() {
+            Ok(username) => Value::Str(username).into(),
+            Err(_) => Value::Empty.into(),
+        }
     }
     fn max_args(&self) -> Option<usize> {
         Some(0)
@@ -3034,7 +3037,7 @@ mod tests_functions {
     #[test]
     fn test_current_user() -> Result<(), CvsSqlError> {
         test_with_details(&User {}, "user", &[], |r| match r {
-            Some(Value::Str(user)) => *user == whoami::username(),
+            Some(Value::Str(user)) => *user == whoami::username().unwrap(),
             _ => false,
         })
     }

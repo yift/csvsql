@@ -190,7 +190,9 @@ impl TableApp {
     }
 
     fn draw_on_term<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<(), CvsSqlError> {
-        terminal.draw(|frame| self.draw(frame))?;
+        terminal
+            .draw(|frame| self.draw(frame))
+            .map_err(|e| CvsSqlError::Terminal(e.to_string()))?;
         Ok(())
     }
 

@@ -231,7 +231,7 @@ fn extract(
             "SELECT AS VALUE/STRUCT".to_string(),
         ));
     }
-    if select.connect_by.is_some() {
+    if !select.connect_by.is_empty() {
         return Err(CvsSqlError::Unsupported(
             "SELECT ... CONNECT BY".to_string(),
         ));
@@ -353,7 +353,13 @@ impl Extractor for TableFactor {
                 lateral,
                 subquery,
                 alias,
+                sample,
             } => {
+                if sample.is_some() {
+                    return Err(CvsSqlError::Unsupported(
+                        "SELECT ... FROM with subquery sample".to_string(),
+                    ));
+                }
                 if *lateral {
                     return Err(CvsSqlError::Unsupported(
                         "SELECT ... FROM with lateral subquery".to_string(),
@@ -382,11 +388,13 @@ impl Extractor for TableFactor {
 mod tests {
     use sqlparser::{
         ast::{
-            ConnectBy, FormatClause, Ident, JsonPath, Statement, TableAlias, TableAliasColumnDef,
-            TableIndexHintType, TableIndexHints, TableIndexType, TableSample, TableSampleKind,
-            TableSampleModifier, TableVersion, ValueTableMode,
+            ConnectByKind, FormatClause, Ident, JsonPath, Statement, TableAlias,
+            TableAliasColumnDef, TableIndexHintType, TableIndexHints, TableIndexType, TableSample,
+            TableSampleKind, TableSampleModifier, TableVersion, ValueTableMode,
+            helpers::attached_token::AttachedToken,
         },
         parser::Parser,
+        tokenizer::{Location, Span, Token, TokenWithSpan},
     };
 
     use crate::{args::Args, dialect::FilesDialect};
@@ -492,11 +500,14 @@ mod tests {
     #[test]
     fn connect_by_unsupported() -> Result<(), CvsSqlError> {
         test_unsupported_select(|select| {
-            let ext = Ident::new("test");
-            select.connect_by = Some(ConnectBy {
-                condition: Expr::Identifier(ext),
+            select.connect_by = vec![ConnectByKind::ConnectBy {
+                connect_token: AttachedToken(TokenWithSpan::new(
+                    Token::Comma,
+                    Span::new(Location::new(1, 10), Location::new(1, 11)),
+                )),
+                nocycle: true,
                 relationships: vec![],
-            });
+            }];
         })
     }
 

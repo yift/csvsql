@@ -1091,9 +1091,13 @@ impl SingleConvert for Expr {
                 expr,
                 data_type,
                 format,
+                array,
             } => {
                 if format.is_some() {
                     return Err(CvsSqlError::Unsupported("CAST with format".to_string()));
+                }
+                if *array {
+                    return Err(CvsSqlError::Unsupported("CAST with ARRAY".to_string()));
                 }
                 let value = expr.convert_single(metadata, engine)?;
                 create_cast(data_type, value)
